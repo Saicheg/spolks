@@ -8,8 +8,9 @@ int main(int argc, char* argv[]) {
   }
   char *host = argv[1], *service = argv[2], *proto = "tcp";
   struct sockaddr_in sin;
-  int sd, n;
+  int sd, n, count=0;
   char buffer[1024];
+  char* msg = "Message\n";
 
   if ((sd = mksock(host, service, proto,  &sin)) == -1) {
     printf("Ошибка при подключении к сокету\n");
@@ -22,6 +23,8 @@ int main(int argc, char* argv[]) {
   }
 
   while ( (n = read(sd, buffer, sizeof(buffer))) > 0 ) {
+    count += n;
+    /* send(sd, msg, sizeof(msg), MSG_OOB); */
     fputs(buffer, stdout);
   }
 

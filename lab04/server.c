@@ -3,12 +3,13 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <netinet/in.h>
-#include <sys/sendfile.h>
+/* #include <sys/sendfile.h> */
 #include <fcntl.h>
+#define BUFF_SIZE 1024
 
 int main(int argc, char* argv[]) {
   if(argc < 3){
-    perror("wrong params format: <HOST> <PORT>");
+    perror("Неправильный формат данных: <HOST> <PORT>");
     exit(EXIT_FAILURE);
   }
 
@@ -17,8 +18,9 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in sin, remote;
   struct stat stat_buf;      /* argument to fstat */
   off_t offset = 0;          /* file offset */
-  int sd, rlen, desc, fd, rc;
-  char buf[1024];
+  int sd, rlen, desc, rc, n;
+  char buffer[BUFF_SIZE];
+  FILE* fd;
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
     printf( "Ошибка при создании сокета\n");
@@ -33,29 +35,29 @@ int main(int argc, char* argv[]) {
       continue;
     }
 
-    fd = open(filename, O_RDONLY);
-    if(fd == -1) {
+    fprintf(stderr, "Начало передачи файла: %s\n", filename);
+
+    fd = fopen(filename, "r");
+    if(fd == (FILE*)NULL) {
       printf("Невозможно прочитать файл\n");
-      continue;
     }
 
-    fstat(fd, &stat_buf);
-    offset = 0;
-
-    fprintf(stderr, "Start sending file %s\n", filename);
-    rc = sendfile (desc, fd, &offset, stat_buf.st_size);
-    if (rc == -1) {
-      fprintf(stderr, "error from sendfile: %s\n", strerror(errno));
-      continue;
-
+    while(1){
+      bzero(buffer, BUFF_SIZE);
+      fread(buffer, sizeof(char), BUFF_SIZE, fd);
+      n = send(desc, buffer, BUFF_SIZE, 0);
+      if (n < 0) {
+        printf("Ошибка при записи в сокет\n");
+        break;
+      }
+      if(feof(fd)) {
+        break;
+      }
     }
-    if (rc != stat_buf.st_size) {
-      fprintf(stderr, "incomplete transfer from sendfile: %d of %d bytes\n", rc, (int)stat_buf.st_size);
-      continue;
-    }
-    fprintf(stderr, "End sending file %s\n", filename);
 
-    close(fd); // file descriptor
+    fprintf(stderr, "Конец передачи файла: %s\n", filename);
+
+    fclose(fd); // file descriptor
     close(desc); // client descriptor
   }
   close(sd);
