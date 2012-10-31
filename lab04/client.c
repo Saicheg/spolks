@@ -10,7 +10,7 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in sin;
   int sd, n, count=0;
   char buffer[1024];
-  char* msg = "Message\n";
+  char* msg = "msg\n";
 
   if ((sd = mksock(host, service, proto,  &sin)) == -1) {
     printf("Ошибка при подключении к сокету\n");
@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
 
   while ( (n = read(sd, buffer, sizeof(buffer))) > 0 ) {
     count += n;
-    /* send(sd, msg, sizeof(msg), MSG_OOB); */
+    sendto(sd, msg, sizeof(msg), MSG_OOB, (struct sockaddr *) &sin, sizeof(sin));
     fputs(buffer, stdout);
   }
 
@@ -33,6 +33,6 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  /* close(sd); */
+  close(sd);
   return EXIT_SUCCESS;
 }

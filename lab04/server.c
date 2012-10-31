@@ -20,6 +20,7 @@ int main(int argc, char* argv[]) {
   off_t offset = 0;          /* file offset */
   int sd, rlen, desc, rc, n;
   char buffer[BUFF_SIZE];
+  char oob_buffer[BUFF_SIZE];
   FILE* fd;
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
@@ -43,6 +44,10 @@ int main(int argc, char* argv[]) {
     }
 
     while(1){
+      n = recvfrom(desc, oob_buffer, sizeof(oob_buffer), MSG_OOB, (struct sockaddr*) &remote, &rlen);
+      if(n > 0) {
+        fputs(oob_buffer, stdout);
+      }
       bzero(buffer, BUFF_SIZE);
       fread(buffer, sizeof(char), BUFF_SIZE, fd);
       n = send(desc, buffer, BUFF_SIZE, 0);
