@@ -1,28 +1,24 @@
-/* 
- * File:   sockutils.h
- * Author: keritaf
- *
- * Created on October 27, 2012, 6:46 AM
- */
-
 #ifndef SOCKUTILS_H
-#define	SOCKUTILS_H
+#define SOCKUTILS_H
 
-#ifdef	__cplusplus
-extern "C" {
-#endif
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
-  int mksock(char * host,
-          char * service,
-          char * proto,
-          struct sockaddr_in * sin);
-  int servsock(char * host,
-               char * service,
-               char * proto,
-               struct sockaddr_in * sin)
-#ifdef	__cplusplus
-}
-#endif
+int mksock(char * host,
+        char * service,
+        char * proto,
+        struct sockaddr_in * sin);
 
-#endif	/* SOCKUTILS_H */
+
+int servsock(char * host,
+             char * service,
+             char * proto,
+             struct sockaddr_in * sin,
+             int qlen);
+
+#endif/* SOCKUTILS_H */
 

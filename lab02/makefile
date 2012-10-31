@@ -1,4 +1,4 @@
-FILE_OUTPUT='server.run'
+FILE_OUTPUT='server'
 
 default: compile
 
