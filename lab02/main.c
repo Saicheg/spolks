@@ -1,9 +1,11 @@
 #include "sockutils.h"
+#include <time.h>
 
 int main() {
-  char *host = "localhost", *service = "2525", *proto = "tcp";
+  char *host = "localhost", *service = "9292", *proto = "tcp";
+  char *message="Hi man!";
   struct sockaddr_in sin, remote;
-  struct timeval timev;
+  time_t current_time;
   int sd, rsd, rlen, readed;
   char buf[513], *t_now;
 
@@ -15,12 +17,9 @@ int main() {
   while(1) {
     rlen = sizeof(remote);
     rsd = accept(sd, (struct sockaddr*) &remote, &rlen);
-    if( (readed = recv(rsd, buf, 512, 0)) != -1) {
-      printf("Test");
-      gettimeofday( &timev, NULL);
-      t_now = ctime( &(timev.tv_sec));
-      send(rsd, t_now, strlen(t_now), 0);
-    }
+    current_time = time(NULL);
+    t_now = ctime( &current_time );
+    send(rsd, t_now, strlen(t_now), 0);
     close(rsd);
   }
   return 0;

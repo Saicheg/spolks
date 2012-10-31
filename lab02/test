@@ -2,5 +2,6 @@
 
 for((i=0;i<20;i++))
 do
-    nc localhost 8989
+    nc localhost 9292
+    sleep 1
 done
