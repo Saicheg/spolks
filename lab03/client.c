@@ -45,21 +45,19 @@ int main(int argc, char* argv[]) {
   }
 
 
-
+  if((fd = fopen(filename, "w+")) == NULL ) {
+    perror("\nОшибка при открытии файла");
+    exit(EXIT_FAILURE);
+  }
   while ( (n = read(sd, &buffer, sizeof(buffer))) > 0 ) {
-    if( fd = fopen(filename, "w+") == NULL ) {
-      perror("\nОшибка при открытии файла");
-      exit(EXIT_FAILURE);
-    }
-
     // Write to file
     fputs(buffer, stdout);
     fputs(buffer, fd);
     /* fwrite(buffer, sizeof(char), n, fd); */
 
-    fclose(fd);
     /* write(fd, buffer, nrd); */
   }
+  fclose(fd);
 
   if ( n < 0 ) {
     printf("Ошибка при получении\n");
