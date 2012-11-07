@@ -8,7 +8,7 @@ int main(int argc, char* argv[]) {
   }
   char *host = argv[1], *service = argv[2], *proto = "tcp";
   struct sockaddr_in sin;
-  int sd, n, count=0;
+  int sd, n, count=0, status;
   char buffer[1024];
   char* msg = "msg\n";
 
@@ -24,7 +24,9 @@ int main(int argc, char* argv[]) {
 
   while ( (n = read(sd, buffer, sizeof(buffer))) > 0 ) {
     count += n;
-    sendto(sd, msg, sizeof(msg), MSG_OOB, (struct sockaddr *) &sin, sizeof(sin));
+    if (status = send(sd, msg, sizeof(msg), MSG_OOB) < 0) {
+      perror("\n   send: ");
+    }
     fputs(buffer, stdout);
   }
 

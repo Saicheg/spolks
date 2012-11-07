@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     }
 
     while(1){
-      n = recvfrom(desc, oob_buffer, sizeof(oob_buffer), MSG_OOB, (struct sockaddr*) &remote, &rlen);
+      n = recv(desc, oob_buffer, sizeof(oob_buffer), MSG_OOB);
       if(n > 0) {
         fputs(oob_buffer, stdout);
       }
