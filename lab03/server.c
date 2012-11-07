@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in sin, remote;
   struct stat stat_buf;      /* argument to fstat */
   off_t offset = 0;          /* file offset */
-  int sd, rlen, desc, fd, rc;
+  int sd, rlen, desc, fd, rc, msg;
   char buf[1024];
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
@@ -36,12 +36,21 @@ int main(int argc, char* argv[]) {
     fd = open(filename, O_RDONLY);
     if(fd == -1) {
       printf("Невозможно прочитать файл\n");
+      close(desc);
+      continue;
+    }
+
+    // Read file length
+    if(read(desc, buf, sizeof(buf)) > 0 ) {
+      offset = atoi(buf);
+      fprintf(stderr, "Размер файла: %s\n", buf);
+    } else {
+      perror("\nОшибка при получении смещения файла: ");
+      close(desc);
       continue;
     }
 
     fstat(fd, &stat_buf);
-    offset = 0;
-
     fprintf(stderr, "Start sending file %s\n", filename);
     rc = sendfile (desc, fd, &offset, stat_buf.st_size);
     if (rc == -1) {
@@ -51,6 +60,7 @@ int main(int argc, char* argv[]) {
     }
     if (rc != stat_buf.st_size) {
       fprintf(stderr, "incomplete transfer from sendfile: %d of %d bytes\n", rc, (int)stat_buf.st_size);
+      close(desc);
       continue;
     }
     fprintf(stderr, "End sending file %s\n", filename);
