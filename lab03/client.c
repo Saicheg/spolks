@@ -11,7 +11,7 @@ int main(int argc, char* argv[]) {
     return -1;
   }
   char *host = argv[1], *service = argv[2], *proto = "tcp";
-  const char *filename = "recieved";
+  const char *filename = "test/recieved";
   struct sockaddr_in sin;
   int sd, n, size;
   FILE* fd;
@@ -45,17 +45,16 @@ int main(int argc, char* argv[]) {
   }
 
 
-  if((fd = fopen(filename, "w+")) == NULL ) {
+  if((fd = fopen(filename, "a")) == NULL ) {
     perror("\nОшибка при открытии файла");
     exit(EXIT_FAILURE);
   }
   while ( (n = read(sd, &buffer, sizeof(buffer))) > 0 ) {
     // Write to file
-    fputs(buffer, stdout);
+    stat(filename, &st);
+    fprintf(stderr, "Размер файла: %lld\n", (long long) st.st_size);
     fputs(buffer, fd);
-    /* fwrite(buffer, sizeof(char), n, fd); */
-
-    /* write(fd, buffer, nrd); */
+    fflush(fd);
   }
   fclose(fd);
 

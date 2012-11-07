@@ -58,11 +58,7 @@ int main(int argc, char* argv[]) {
       continue;
 
     }
-    if (rc != stat_buf.st_size) {
-      fprintf(stderr, "incomplete transfer from sendfile: %d of %d bytes\n", rc, (int)stat_buf.st_size);
-      close(desc);
-      continue;
-    }
+
     fprintf(stderr, "End sending file %s\n", filename);
 
     close(fd); // file descriptor
