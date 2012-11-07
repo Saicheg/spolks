@@ -1,11 +1,13 @@
 FILE_SERVER_OUTPUT='server'
 FILE_CLIENT_OUTPUT='client'
 
+CCFLAGS=-ggdb
+
 default: compile
 
 compile: clean
-	gcc -ggdb -o $(FILE_SERVER_OUTPUT) server.c sockutils.c
-	gcc -ggdb -o $(FILE_CLIENT_OUTPUT) client.c sockutils.c
+	gcc $(CCFLAGS) -o $(FILE_SERVER_OUTPUT) server.c sockutils.c
+	gcc $(CCFLAGS) -o $(FILE_CLIENT_OUTPUT) client.c sockutils.c
 
 clean:
 	rm -rf *.o
