@@ -3,7 +3,7 @@ FILE_OUTPUT='server'
 default: compile
 
 compile: clean
-	gcc -o $(FILE_OUTPUT) *.c
+	gcc -ggdb -Wall -o $(FILE_OUTPUT) *.c
 
 clean:
 	rm -rf *.o
