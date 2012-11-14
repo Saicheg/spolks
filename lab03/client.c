@@ -13,11 +13,10 @@ int main(int argc, char* argv[]) {
   char *host = argv[1], *service = argv[2], *proto = "tcp";
   const char *filename = "test/recieved";
   struct sockaddr_in sin;
-  int sd, n, size;
+  int sd, n;
   FILE* fd;
   struct stat st;
   char offset[1024], buffer[1024];
-  ssize_t nrd;
 
   // Open file and see if it exists
   if( access( filename, F_OK ) != -1 ) {

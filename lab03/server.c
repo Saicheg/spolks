@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <sys/sendfile.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 int main(int argc, char* argv[]) {
   if(argc < 3){
@@ -17,7 +18,8 @@ int main(int argc, char* argv[]) {
   struct sockaddr_in sin, remote;
   struct stat stat_buf;      /* argument to fstat */
   off_t offset = 0;          /* file offset */
-  int sd, rlen, desc, fd, rc, msg;
+  int sd, desc, fd, rc;
+  socklen_t rlen;
   char buf[1024];
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
