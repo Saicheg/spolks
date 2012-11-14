@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  if( send(sd, offset, sizeof(offset), 0) < 0 ) {
+  if( send(sd, offset, strlen(offset), 0) < 0 ) {
     perror("\nОшибка при отправке смещения файла: ");
     exit(EXIT_FAILURE);
   }
