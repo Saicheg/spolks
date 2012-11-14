@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <netinet/in.h>
 /* #include <sys/sendfile.h> */
+#include <unistd.h>
 #include <fcntl.h>
 #define BUFF_SIZE 1024
 
@@ -16,9 +17,8 @@ int main(int argc, char* argv[]) {
   char* filename="test/test"; // keep filename static for test purposes
   char *host = argv[1], *service = argv[2], *proto = "tcp";
   struct sockaddr_in sin, remote;
-  struct stat stat_buf;      /* argument to fstat */
-  off_t offset = 0;          /* file offset */
-  int sd, rlen, desc, rc, n;
+  int sd, desc, n;
+  socklen_t rlen;
   char buffer[BUFF_SIZE];
   char oob_buffer[BUFF_SIZE];
   FILE* fd;

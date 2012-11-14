@@ -1,5 +1,6 @@
 #include "sockutils.h"
 #include <time.h>
+#include <unistd.h>
 
 int main(int argc, char* argv[]) {
   if(argc < 3){
@@ -17,14 +18,14 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) < 0 ) {
+  if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) == -1 ) {
     printf("Ошибка при соединении с сервером\n");
     exit(EXIT_FAILURE);
   }
 
   while ( (n = read(sd, buffer, sizeof(buffer))) > 0 ) {
     count += n;
-    if (status = send(sd, msg, sizeof(msg), MSG_OOB) < 0) {
+    if ((status = send(sd, msg, sizeof(msg), MSG_OOB)) < 0) {
       perror("\n   send: ");
     }
     fputs(buffer, stdout);

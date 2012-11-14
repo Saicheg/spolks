@@ -10,13 +10,13 @@ int mksock(char *host, char * service, char * proto, struct sockaddr_in *sin)
   memset(sin, 0, sizeof ( *sin));
   sin->sin_family = AF_INET;
 
-  if (hptr = gethostbyname(host))
+  if ((hptr = gethostbyname(host)) != NULL)
     memcpy(&sin->sin_addr, hptr->h_addr, hptr->h_length);
   else return -1;
 
   if (!(pptr = getprotobyname(proto))) return -1;
 
-  if (sptr = getservbyname(service, proto))
+  if ((sptr = getservbyname(service, proto))!=NULL)
     sin->sin_port = sptr->s_port;
   else
     if ((sin->sin_port = htons((unsigned short) atoi(service))) == 0) return -1;
@@ -59,19 +59,4 @@ int servsock(char *host, char * service, char * proto, struct sockaddr_in *sin, 
     }
   }
   return sd;
-}
-
-int sendall(int s, char *buf, int len, int flags)
-{
-    int total = 0;
-    int n;
-
-    while(total < len)
-    {
-        n = send(s, buf+total, len-total, flags);
-        if(n == -1) { break; }
-        total += n;
-    }
-
-    return (n==-1 ? -1 : total);
 }
