@@ -6,12 +6,12 @@
 #include <errno.h>
 
 int main(int argc, char* argv[]) {
-  if(argc < 3){
-    perror("wrong params format: <HOST> <PORT>");
-    return -1;
+  if(argc < 4){
+    perror("Params format: <HOST> <PORT> <FILENAME>");
+    exit(EXIT_SUCCESS);
   }
   char *host = argv[1], *service = argv[2], *proto = "tcp";
-  const char *filename = "test/recieved";
+  const char *filename = argv[3];
   struct sockaddr_in sin;
   int sd, n;
   FILE* fd;
@@ -26,10 +26,10 @@ int main(int argc, char* argv[]) {
     strcpy(offset, "0");
   }
 
-  printf("\nРазмер файла: %s\n", offset);
+  printf("Requested file offset: %s\n", offset);
 
   if ((sd = mksock(host, service, proto,  &sin)) == -1) {
-    perror("\nОшибка при подключении к сокету: ");
+    perror("\nОшибка при создании сокета: ");
     exit(EXIT_FAILURE);
   }
 
@@ -39,7 +39,7 @@ int main(int argc, char* argv[]) {
   }
 
   if( send(sd, offset, sizeof(offset), 0) < 0 ) {
-    perror("\nОшибка при отправке размера файла: ");
+    perror("\nОшибка при отправке смещения файла: ");
     exit(EXIT_FAILURE);
   }
 
@@ -51,16 +51,17 @@ int main(int argc, char* argv[]) {
   while ( (n = read(sd, &buffer, sizeof(buffer))) > 0 ) {
     // Write to file
     stat(filename, &st);
-    fprintf(stderr, "Размер файла: %lld\n", (long long) st.st_size);
-    fputs(buffer, fd);
+    fwrite(buffer, sizeof(buffer[0]), n, fd);
     fflush(fd);
+    printf("Written %d bytes at file offset %lld.\n",n, (long long) st.st_size);
   }
   fclose(fd);
-
   if ( n < 0 ) {
-    printf("Ошибка при получении\n");
+    perror("\nError receiving file:");
     exit(EXIT_FAILURE);
   }
+  stat(filename, &st);
+  printf("Total file size: %jd.\n",(intmax_t)st.st_size);
 
   close(sd);
   return EXIT_SUCCESS;

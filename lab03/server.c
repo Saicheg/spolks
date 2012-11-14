@@ -8,12 +8,12 @@
 #include <unistd.h>
 
 int main(int argc, char* argv[]) {
-  if(argc < 3){
-    perror("wrong params format: <HOST> <PORT>");
+  if(argc < 4){
+    perror("Params format: <HOST> <PORT> <FILE>");
     exit(EXIT_FAILURE);
   }
 
-  char* filename="test/test"; // keep filename static for test purposes
+  char* filename = argv[3];
   char *host = argv[1], *service = argv[2], *proto = "tcp";
   struct sockaddr_in sin, remote;
   struct stat stat_buf;      /* argument to fstat */
@@ -23,21 +23,23 @@ int main(int argc, char* argv[]) {
   char buf[1024];
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
-    printf( "Ошибка при создании сокета\n");
+    perror("\nError creating socket:");
     return 1;
   }
 
+  printf("Server started...\n");
+
   while(1) {
-    rlen = sizeof(remote);
+    rlen = sizeof(struct sockaddr_in);
     desc = accept(sd, (struct sockaddr*) &remote, &rlen);
     if (desc == -1) {
-      printf("Ошибка при подключении\n");
+      perror("\nConnection error: ");
       continue;
     }
 
     fd = open(filename, O_RDONLY);
     if(fd == -1) {
-      printf("Невозможно прочитать файл\n");
+      perror("\nError opening file: ");
       close(desc);
       continue;
     }
@@ -45,9 +47,9 @@ int main(int argc, char* argv[]) {
     // Read file length
     if(read(desc, buf, sizeof(buf)) > 0 ) {
       offset = atoi(buf);
-      fprintf(stderr, "Размер файла: %s\n", buf);
+      printf("Requested start offset: %lu\n", offset);
     } else {
-      perror("\nОшибка при получении смещения файла: ");
+      perror("\nError getting start file offset: ");
       close(desc);
       continue;
     }
@@ -56,12 +58,11 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Start sending file %s\n", filename);
     rc = sendfile (desc, fd, &offset, stat_buf.st_size);
     if (rc == -1) {
-      fprintf(stderr, "error from sendfile: %s\n", strerror(errno));
+      perror("\nSendfile error: ");
       continue;
-
     }
 
-    fprintf(stderr, "End sending file %s\n", filename);
+    fprintf(stdout, "End sending file %s\n", filename);
 
     close(fd); // file descriptor
     close(desc); // client descriptor
