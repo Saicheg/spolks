@@ -1,13 +1,14 @@
 #include "sockutils.h"
 #include <time.h>
+#include <unistd.h>
 
 int main() {
   char *host = "localhost", *service = "9292", *proto = "tcp";
-  char *message="Hi man!";
   struct sockaddr_in sin, remote;
   time_t current_time;
-  int sd, rsd, rlen, readed;
-  char buf[513], *t_now;
+  int sd, rsd;
+  socklen_t rlen;
+  char *t_now;
 
   if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
     printf( "Ошибка при создании сокета\n");
