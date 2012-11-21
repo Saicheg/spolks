@@ -1,40 +1,117 @@
-#include "sockutils.h"
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <signal.h>
+#include <fcntl.h>
+
+#include "sockutils.h"
+#include "common.h"
+
+size_t bytes_total = 0;
+size_t bytes_read= 0;
+int sd;
+char buffer[BUF_SIZE];
+char buffer_oob[2]; 
 
 int main(int argc, char* argv[]) {
-  if(argc < 3){
-    perror("wrong params format: <HOST> <PORT>");
-    return -1;
+  if(argc < 4){
+    printf("Params format: <HOST> <PORT> <FILENAME>\n");
+    exit(EXIT_SUCCESS);
   }
+
   char *host = argv[1], *service = argv[2], *proto = "tcp";
+  const char *filename = argv[3];
   struct sockaddr_in sin;
-  int sd, n, count=0, status;
-  char buffer[1024];
-  char* msg = "msg\n";
+  FILE* fd;
+  struct stat st;
+
+  // Open file and see if it exists
+  if( access( filename, F_OK ) != -1 ) {
+    stat(filename, &st);
+    sprintf(buffer, "%lld", (long long) st.st_size);
+  } else {
+    strcpy(buffer, "0");
+  }
+
+  printf("Requested file offset: %s\n", buffer);
 
   if ((sd = mksock(host, service, proto,  &sin)) == -1) {
-    printf("Ошибка при подключении к сокету\n");
+    perror("\nОшибка при создании сокета: ");
+    exit(EXIT_FAILURE);
+  }
+  
+  fcntl(sd, F_SETOWN, getpid());
+  /*
+  // Setup SIGURG
+  struct sigaction sa;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_handler = signal_urgent;
+  sigaction(SIGURG, &sa, NULL);
+  */
+
+  // Manually setting oobinline, though default is 0 already
+  int oobinline = 0;
+  setsockopt(sd,
+    SOL_SOCKET,         /* Level */
+    SO_OOBINLINE,       /* Option */
+    &oobinline,         /* Ptr to value */
+    sizeof (oobinline)); 
+
+  if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) < 0 ) {
+    perror("\nОшибка при соединении с сервером: ");
     exit(EXIT_FAILURE);
   }
 
-  if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) == -1 ) {
-    printf("Ошибка при соединении с сервером\n");
+  if( send(sd, buffer, strlen(buffer), 0) < 0 ) {
+    perror("\nОшибка при отправке смещения файла: ");
     exit(EXIT_FAILURE);
   }
 
-  while ( (n = read(sd, buffer, sizeof(buffer))) > 0 ) {
-    count += n;
-    if ((status = send(sd, msg, sizeof(msg), MSG_OOB)) < 0) {
-      perror("\n   send: ");
+
+  if((fd = fopen(filename, "a")) == NULL ) {
+    perror("\nОшибка при открытии файла: ");
+    exit(EXIT_FAILURE);
+  }
+
+  while (1) {
+    if (sockatmark(sd))
+    {
+      size_t bytes_oob = recv(sd, &buffer_oob, 1, MSG_OOB);
+      if (bytes_oob > 0)
+      {
+        printf("Received last/total: %zd/%zd\n", bytes_read, bytes_total);
+      }
     }
-    fputs(buffer, stdout);
-  }
 
-  if ( n < 0 ) {
-    printf("Ошибка при получении\n");
-    exit(EXIT_FAILURE);
+    bytes_read = recv(sd, &buffer, 1, 0);
+    if (bytes_read == -1)
+    {
+      perror("\nError reading data from socket: ");
+      break;
+    }
+    if (bytes_read == 0)
+    {
+      printf("File receival complete.\n");
+      break;
+    }
+
+    bytes_total += bytes_read;
+
+    stat(filename, &st);
+    fwrite(buffer, sizeof(buffer[0]), bytes_read, fd);
+    fflush(fd);
+
+
   }
+  fclose(fd);
+
+  stat(filename, &st);
+  printf("Total file size: %jd.\n",(intmax_t)st.st_size);
 
   close(sd);
   return EXIT_SUCCESS;

@@ -20,7 +20,5 @@ int servsock(char * host,
              struct sockaddr_in * sin,
              int qlen);
 
-int sendall(int s, char *buf, int len, int flags);
-
 #endif/* SOCKUTILS_H */
 
