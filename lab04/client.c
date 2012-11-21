@@ -16,7 +16,7 @@ size_t bytes_total = 0;
 size_t bytes_read= 0;
 int sd;
 char buffer[BUF_SIZE];
-char buffer_oob[2]; 
+char buffer_oob[2];
 
 int main(int argc, char* argv[]) {
   if(argc < 4){
@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
     perror("\nОшибка при создании сокета: ");
     exit(EXIT_FAILURE);
   }
-  
+
   fcntl(sd, F_SETOWN, getpid());
   /*
   // Setup SIGURG
@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
     SOL_SOCKET,         /* Level */
     SO_OOBINLINE,       /* Option */
     &oobinline,         /* Ptr to value */
-    sizeof (oobinline)); 
+    sizeof (oobinline));
 
   if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) < 0 ) {
     perror("\nОшибка при соединении с сервером: ");
@@ -105,8 +105,6 @@ int main(int argc, char* argv[]) {
     stat(filename, &st);
     fwrite(buffer, sizeof(buffer[0]), bytes_read, fd);
     fflush(fd);
-
-
   }
   fclose(fd);
 
