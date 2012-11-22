@@ -12,4 +12,4 @@
 *.a
 *.run
 
-test
+/test
