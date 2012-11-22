@@ -53,13 +53,6 @@ void tcp_server(int sd) {
   int desc;
   char buf[BUF_SIZE];
 
-  fd = fopen(filename, "r");
-  if(fd == NULL) {
-    perror("\nError opening file: ");
-    close(sd);
-    exit(EXIT_FAILURE);
-  }
-
   while(1) {
     rlen = sizeof(struct sockaddr_in);
     desc = accept(sd, (struct sockaddr*) &remote, &rlen);
@@ -77,6 +70,13 @@ void tcp_server(int sd) {
       close(desc);
       fclose(fd);
       continue;
+    }
+
+    fd = fopen(filename, "r");
+    if(fd == NULL) {
+      perror("\nError opening file: ");
+      close(sd);
+      exit(EXIT_FAILURE);
     }
     fseek(fd, offset, SEEK_SET);
 
