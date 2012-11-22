@@ -106,7 +106,7 @@ void tcp_server(int sd) {
         break;
       }
     }
-    send(desc, oob_message, 1, MSG_OOB);
+    /* send(desc, oob_message, 1, MSG_OOB); */
     shutdown(desc, SHUT_RDWR);
     fclose(fd); // file descriptor
     close(desc); // client descriptor
@@ -138,7 +138,7 @@ void udp_server(int sd) {
 
     if(num > 0) {
       offset = atoi(buf);
-      printf("Request with offset: %i\n", offset);
+      printf("Request with offset: %lu\n", offset);
       if(offset < size) {
         fseek(fd, offset, SEEK_SET);
         bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
