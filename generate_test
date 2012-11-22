@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+require 'faker'
+
+iterations = ARGV[0].to_i || 500
+
+File.open('test', 'w+') do |f|
+ iterations.times { f.write("#{Faker::Lorem.paragraphs(10).join("\n")}\n")}
+end
