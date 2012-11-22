@@ -100,14 +100,14 @@ void tcp_client(int sd){
   }
 
   while (1) {
-    if (sockatmark(sd))
-    {
-      size_t bytes_oob = recv(sd, &buffer_oob, 1, MSG_OOB);
-      if (bytes_oob > 0)
-      {
-        printf("Received last/total: %zd/%zd\n", bytes_read, bytes_total);
-      }
-    }
+    /* if (sockatmark(sd)) */
+    /* { */
+    /*   size_t bytes_oob = recv(sd, &buffer_oob, 1, MSG_OOB); */
+    /*   if (bytes_oob > 0) */
+    /*   { */
+    /*     printf("Received last/total: %zd/%zd\n", bytes_read, bytes_total); */
+    /*   } */
+    /* } */
 
     bytes_read = recv(sd, &buffer, 1, 0);
     if (bytes_read == -1)

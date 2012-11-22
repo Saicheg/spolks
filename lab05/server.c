@@ -94,11 +94,11 @@ void tcp_server(int sd) {
       bytes_total += bytes_sent;
       printf("Sent last/total: %zd/%zd\n", bytes_sent, bytes_total);
 
-      bytes_sent = send(desc, oob_message, 1, MSG_OOB);
-      if (bytes_sent == -1)
-      {
-        perror("\nError sending out-of-band data: ");
-      }
+      /* bytes_sent = send(desc, oob_message, 1, MSG_OOB); */
+      /* if (bytes_sent == -1) */
+      /* { */
+      /*   perror("\nError sending out-of-band data: "); */
+      /* } */
 
 
       if(feof(fd)) {
@@ -137,8 +137,8 @@ void udp_server(int sd) {
     num = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr*) &remote, &rlen);
 
     if(num > 0) {
-      printf("Request with offset: %s\n", buf);
       offset = atoi(buf);
+      printf("Request with offset: %i\n", offset);
       if(offset < size) {
         fseek(fd, offset, SEEK_SET);
         bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
