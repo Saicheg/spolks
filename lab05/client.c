@@ -16,7 +16,8 @@ size_t bytes_total = 0;
 size_t bytes_read= 0;
 int sd;
 char buffer_oob[2];
-struct sockaddr_in sin;
+struct sockaddr_in sin, remote;
+socklen_t rlen;
 struct stat st;
 FILE* fd;
 
@@ -153,24 +154,24 @@ void udp_client(int sd) {
 
     printf("Requested file offset: %s\n", buffer);
 
-    num = sendto(sd, buffer, strlen(buffer), 0, (struct sockaddr *) &sin, sizeof(sin));
+    rlen = sizeof(sin);
+
+    num = sendto(sd, buffer, strlen(buffer), 0, (struct sockaddr *) &sin, rlen);
     if(num < 0) {
       perror("\nError sending filesize to server: ");
       close(sd);
       exit(EXIT_FAILURE);
     }
 
-    num = recvfrom(sd, buffer, sizeof(buffer), 0, NULL, NULL);
+    num = recvfrom(sd, buffer, sizeof(buffer), 0,(struct sockaddr *) &sin, &rlen);
     if(num < 0) {
       perror("\nError recieving from server: ");
       close(sd);
       exit(EXIT_FAILURE);
-    } else {
-      printf("\nRecieved: %s", buffer);
     }
 
     if (strcmp(buffer, end_message) == 0) {
-      printf("End reading file");
+      printf("\nEnd reading file\n");
       break;
     }
 

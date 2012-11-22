@@ -13,7 +13,8 @@ void udp_server(int sd);
 
 char *host, *service, *proto, *filename;
 FILE* fd;
-struct sockaddr_in sin;
+struct sockaddr_in sin, remote;
+socklen_t rlen;
 
 int main(int argc, char* argv[]) {
   int sd;
@@ -51,8 +52,6 @@ void tcp_server(int sd) {
   off_t offset = 0;          /* file offset */
   int desc;
   char buf[BUF_SIZE];
-  socklen_t rlen;
-  struct sockaddr_in remote;
 
   fd = fopen(filename, "r");
   if(fd == NULL) {
@@ -133,9 +132,9 @@ void udp_server(int sd) {
   stat(filename, &st);
   size = st.st_size;
 
-
   while(1) {
-    num = recvfrom(sd, buf, sizeof(buf), 0, NULL, NULL);
+    rlen = sizeof(remote);
+    num = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr*) &remote, &rlen);
 
     if(num > 0) {
       printf("Request with offset: %s\n", buf);
@@ -143,13 +142,13 @@ void udp_server(int sd) {
       if(offset < size) {
         fseek(fd, offset, SEEK_SET);
         bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
-        bytes_sent = sendto(sd, buf, bytes_read, 0, (struct sockaddr *) &sin, sizeof(sin));
+        bytes_sent = sendto(sd, buf, bytes_read, 0, (struct sockaddr *) &remote, rlen);
         if (bytes_sent < 0) {
           perror("\nError sending data: ");
           continue;
         }
       } else {
-        bytes_sent = sendto(sd, end_message, sizeof(end_message), 0, (struct sockaddr *) &sin, sizeof(sin));
+        bytes_sent = sendto(sd, end_message, sizeof(end_message), 0, (struct sockaddr *) &remote, rlen);
         if (bytes_sent < 0) {
           perror("\nError sending EOF message: ");
           continue;
