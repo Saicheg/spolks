@@ -1,7 +1,7 @@
 FILE_SERVER_OUTPUT='server'
 FILE_CLIENT_OUTPUT='client'
 
-CCFLAGS=-ggdb -Wall
+CCFLAGS=-ggdb -Wall -pthread
 
 default: compile
 
