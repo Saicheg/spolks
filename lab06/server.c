@@ -51,14 +51,19 @@ int main(int argc, char* argv[]) {
 void tcp_server(int sd) {
 
   off_t offset = 0;          /* file offset */
-  int desc, nfds;
+  int i, j, k, desc, maxfd, maxi, client[FD_SETSIZE], numready;
   char buf[BUF_SIZE];
 
-  nfds = getdtablesize();
+  maxfd = sd;
+  maxi = -1;
+
+  for (i=0; i < FD_SETSIZE; i++) {
+    client[i] = -1;
+  }
 
   FD_ZERO(&afds);
   FD_ZERO(&rfds);
-  FD_SET(sd, &master);
+  FD_SET(sd, &afds);
 
 
   while(1) {
@@ -66,78 +71,103 @@ void tcp_server(int sd) {
 
     memcpy( &rfds, &afds, sizeof(rfds) );
 
-    if(select( nfds, &rfds, (fd_set*) 0,(fd_set*) 0, (struce timeval*) 0) == -1) {
+
+    numready = select( maxfd +1 , &rfds, (fd_set*) 0,(fd_set*) 0, (struct timeval*) 0);
+    if(numready == -1) {
       perror("\nServer select error: ");
       exit(EXIT_FAILURE);
     }
 
     if(FD_ISSET(sd, &rfds)) {
+
       desc = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
       if (desc == -1) {
         perror("\nConnection error: ");
         continue;
       }
-      FD_SET(desc, &afds);
+
+      for(j=0; j<FD_SETSIZE; j++) {
+
+        if(client[j] < 0) {
+          client[j] = desc;
+          break;
+        }
+
+        FD_SET(desc, &afds);
+
+        if(desc > maxfd) {
+          maxfd = desc;
+        }
+
+        if(j > maxi) {
+          maxi = j;
+        }
+      }
+
     }
 
-    for(desc = 0; desc < nfds; ++desc) {
+    for(k = 0; k <= maxi; k++) {
 
-      if( (desc != sd) && FD_ISSET(desc, &rfds)) {
-        TCP_PROC(desc);
-        close(desc);
-        FD_CLR(desc, &afds);
-        continue;
-      }
+      if(client[k] > 0) {
+        if(FD_ISSET(client[k], &afds)) {
 
-      // Read file start offset
-      if(read(desc, buf, sizeof(buf)*sizeof(buf[0])) > 0 ) {
-        offset = atoi(buf);
-        printf("Requested start offset: %lu\n", offset);
-      } else {
-        perror("\nError getting start file offset: ");
-        close(desc);
-        fclose(fd);
-        continue;
-      }
+          // Read file start offset
+          if(read(client[k], buf, sizeof(buf)*sizeof(buf[0])) > 0 ) {
+            offset = atoi(buf);
+            printf("Requested start offset: %lu\n", offset);
+          } else {
+            perror("\nError getting start file offset: ");
+            close(client[k]);
+            FD_CLR(client[k], &afds);
+/*             client[k] = -1; */
+            fclose(fd);
+            continue;
+          }
 
-      fd = fopen(filename, "r");
-      if(fd == NULL) {
-        perror("\nError opening file: ");
-        close(sd);
-        exit(EXIT_FAILURE);
-      }
-      fseek(fd, offset, SEEK_SET);
+          fd = fopen(filename, "r");
+          if(fd == NULL) {
+            perror("\nError opening file: ");
+            close(sd);
+            exit(EXIT_FAILURE);
+          }
+          fseek(fd, offset, SEEK_SET);
 
 
-      size_t bytes_total = 0;
-      printf("Start sending file %s\n", filename);
-      while(1){
-        size_t bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
-        size_t bytes_sent = send(desc, buf, bytes_read, 0);
-        if (bytes_sent == -1) {
-          perror("\nError writing to socket: ");
-          break;
+          size_t bytes_total = 0;
+          printf("Start sending file %s\n", filename);
+
+          while(1){
+
+            size_t bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
+            size_t bytes_sent = send(client[k], buf, bytes_read, 0);
+            if (bytes_sent == -1) {
+              perror("\nError writing to socket: ");
+              break;
+            }
+
+            bytes_total += bytes_sent;
+            printf("Sent last/total: %zd/%zd\n", bytes_sent, bytes_total);
+
+            /* bytes_sent = send(desc, oob_message, 1, MSG_OOB); */
+            /* if (bytes_sent == -1) */
+            /* { */
+            /*   perror("\nError sending out-of-band data: "); */
+            /* } */
+
+
+            if(feof(fd)) {
+              printf("End sending file %s\n", filename);
+              break;
+            }
+          }
+
+          close(client[k]);
+          FD_CLR(client[k], &afds);
+/*           client[k] = -1; */
+          fclose(fd); // file descriptor
         }
-
-        bytes_total += bytes_sent;
-        printf("Sent last/total: %zd/%zd\n", bytes_sent, bytes_total);
-
-        /* bytes_sent = send(desc, oob_message, 1, MSG_OOB); */
-        /* if (bytes_sent == -1) */
-        /* { */
-        /*   perror("\nError sending out-of-band data: "); */
-        /* } */
-
-
-        if(feof(fd)) {
-          printf("End sending file %s\n", filename);
-          break;
-        }
       }
-    /* send(desc, oob_message, 1, MSG_OOB); */
-    shutdown(desc, SHUT_RDWR);
-    fclose(fd); // file descriptor
-    close(desc); // client descriptor
+      if(--numready <= 0) break;
     }
   }
 }
