@@ -15,6 +15,7 @@ char *host, *service, *proto, *filename;
 FILE* fd;
 struct sockaddr_in server_addr, remote_addr;
 socklen_t rlen;
+fd_set rfds, afds;
 
 int main(int argc, char* argv[]) {
   int sd;
@@ -50,66 +51,94 @@ int main(int argc, char* argv[]) {
 void tcp_server(int sd) {
 
   off_t offset = 0;          /* file offset */
-  int desc;
+  int desc, nfds;
   char buf[BUF_SIZE];
+
+  nfds = getdtablesize();
+
+  FD_ZERO(&afds);
+  FD_ZERO(&rfds);
+  FD_SET(sd, &master);
+
 
   while(1) {
     rlen = sizeof(struct sockaddr_in);
-    desc = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
-    if (desc == -1) {
-      perror("\nConnection error: ");
-      continue;
-    }
 
-    // Read file start offset
-    if(read(desc, buf, sizeof(buf)*sizeof(buf[0])) > 0 ) {
-      offset = atoi(buf);
-      printf("Requested start offset: %lu\n", offset);
-    } else {
-      perror("\nError getting start file offset: ");
-      close(desc);
-      fclose(fd);
-      continue;
-    }
+    memcpy( &rfds, &afds, sizeof(rfds) );
 
-    fd = fopen(filename, "r");
-    if(fd == NULL) {
-      perror("\nError opening file: ");
-      close(sd);
+    if(select( nfds, &rfds, (fd_set*) 0,(fd_set*) 0, (struce timeval*) 0) == -1) {
+      perror("\nServer select error: ");
       exit(EXIT_FAILURE);
     }
-    fseek(fd, offset, SEEK_SET);
 
-
-    size_t bytes_total = 0;
-    printf("Start sending file %s\n", filename);
-    while(1){
-      size_t bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
-      size_t bytes_sent = send(desc, buf, bytes_read, 0);
-      if (bytes_sent == -1) {
-        perror("\nError writing to socket: ");
-        break;
+    if(FD_ISSET(sd, &rfds)) {
+      desc = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
+      if (desc == -1) {
+        perror("\nConnection error: ");
+        continue;
       }
-
-      bytes_total += bytes_sent;
-      printf("Sent last/total: %zd/%zd\n", bytes_sent, bytes_total);
-
-      /* bytes_sent = send(desc, oob_message, 1, MSG_OOB); */
-      /* if (bytes_sent == -1) */
-      /* { */
-      /*   perror("\nError sending out-of-band data: "); */
-      /* } */
-
-
-      if(feof(fd)) {
-        printf("End sending file %s\n", filename);
-        break;
-      }
+      FD_SET(desc, &afds);
     }
+
+    for(desc = 0; desc < nfds; ++desc) {
+
+      if( (desc != sd) && FD_ISSET(desc, &rfds)) {
+        TCP_PROC(desc);
+        close(desc);
+        FD_CLR(desc, &afds);
+        continue;
+      }
+
+      // Read file start offset
+      if(read(desc, buf, sizeof(buf)*sizeof(buf[0])) > 0 ) {
+        offset = atoi(buf);
+        printf("Requested start offset: %lu\n", offset);
+      } else {
+        perror("\nError getting start file offset: ");
+        close(desc);
+        fclose(fd);
+        continue;
+      }
+
+      fd = fopen(filename, "r");
+      if(fd == NULL) {
+        perror("\nError opening file: ");
+        close(sd);
+        exit(EXIT_FAILURE);
+      }
+      fseek(fd, offset, SEEK_SET);
+
+
+      size_t bytes_total = 0;
+      printf("Start sending file %s\n", filename);
+      while(1){
+        size_t bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
+        size_t bytes_sent = send(desc, buf, bytes_read, 0);
+        if (bytes_sent == -1) {
+          perror("\nError writing to socket: ");
+          break;
+        }
+
+        bytes_total += bytes_sent;
+        printf("Sent last/total: %zd/%zd\n", bytes_sent, bytes_total);
+
+        /* bytes_sent = send(desc, oob_message, 1, MSG_OOB); */
+        /* if (bytes_sent == -1) */
+        /* { */
+        /*   perror("\nError sending out-of-band data: "); */
+        /* } */
+
+
+        if(feof(fd)) {
+          printf("End sending file %s\n", filename);
+          break;
+        }
+      }
     /* send(desc, oob_message, 1, MSG_OOB); */
     shutdown(desc, SHUT_RDWR);
     fclose(fd); // file descriptor
     close(desc); // client descriptor
+    }
   }
 }
 
