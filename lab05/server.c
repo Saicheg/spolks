@@ -86,7 +86,7 @@ void tcp_server(int sd) {
     while(1){
       size_t bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
       size_t bytes_sent = send(desc, buf, bytes_read, 0);
-      if (bytes_sent < 0) {
+      if (bytes_sent == -1) {
         perror("\nError writing to socket: ");
         break;
       }
