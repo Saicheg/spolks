@@ -13,7 +13,7 @@ void udp_server(int sd);
 
 char *host, *service, *proto, *filename;
 FILE* fd;
-struct sockaddr_in sin, remote;
+struct sockaddr_in server_addr, remote_addr;
 socklen_t rlen;
 
 int main(int argc, char* argv[]) {
@@ -30,7 +30,7 @@ int main(int argc, char* argv[]) {
     exit(EXIT_SUCCESS);
   }
 
-  if ( (sd = servsock(host, service, proto,  &sin, 10)) == -1) {
+  if ( (sd = servsock(host, service, proto,  &server_addr, 10)) == -1) {
     perror("\nError creating socket: ");
     exit(EXIT_FAILURE);
   }
@@ -55,7 +55,7 @@ void tcp_server(int sd) {
 
   while(1) {
     rlen = sizeof(struct sockaddr_in);
-    desc = accept(sd, (struct sockaddr*) &remote, &rlen);
+    desc = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
     if (desc == -1) {
       perror("\nConnection error: ");
       continue;
@@ -133,8 +133,8 @@ void udp_server(int sd) {
   size = st.st_size;
 
   while(1) {
-    rlen = sizeof(remote);
-    num = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr*) &remote, &rlen);
+    rlen = sizeof(remote_addr);
+    num = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr*) &remote_addr, &rlen);
 
     if(num > 0) {
       offset = atoi(buf);
@@ -142,13 +142,13 @@ void udp_server(int sd) {
       if(offset < size) {
         fseek(fd, offset, SEEK_SET);
         bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
-        bytes_sent = sendto(sd, buf, bytes_read, 0, (struct sockaddr *) &remote, rlen);
+        bytes_sent = sendto(sd, buf, bytes_read, 0, (struct sockaddr *) &remote_addr, rlen);
         if (bytes_sent < 0) {
           perror("\nError sending data: ");
           continue;
         }
       } else {
-        bytes_sent = sendto(sd, end_message, sizeof(end_message), 0, (struct sockaddr *) &remote, rlen);
+        bytes_sent = sendto(sd, end_message, sizeof(end_message), 0, (struct sockaddr *) &remote_addr, rlen);
         if (bytes_sent < 0) {
           perror("\nError sending EOF message: ");
           continue;

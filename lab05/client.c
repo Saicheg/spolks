@@ -16,7 +16,7 @@ size_t bytes_total = 0;
 size_t bytes_read= 0;
 int sd;
 char buffer_oob[2];
-struct sockaddr_in sin, remote;
+struct sockaddr_in remote_addr;
 socklen_t rlen;
 struct stat st;
 FILE* fd;
@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   service = argv[3];
   filename = argv[4];
 
-  if ((sd = mksock(host, service, proto,  &sin)) == -1) {
+  if ((sd = mksock(host, service, proto,  &remote_addr)) == -1) {
     perror("\nError creating socket: ");
     exit(EXIT_FAILURE);
   }
@@ -84,7 +84,7 @@ void tcp_client(int sd){
     &oobinline,         /* Ptr to value */
     sizeof (oobinline));
 
-  if (connect(sd, (struct sockaddr *) &sin, sizeof(sin) ) < 0 ) {
+  if (connect(sd, (struct sockaddr *) &remote_addr, sizeof(remote_addr) ) < 0 ) {
     perror("\nОшибка при соединении с сервером: ");
     exit(EXIT_FAILURE);
   }
@@ -154,16 +154,16 @@ void udp_client(int sd) {
 
     printf("Requested file offset: %s\n", buffer);
 
-    rlen = sizeof(sin);
+    rlen = sizeof(remote_addr);
 
-    num = sendto(sd, buffer, strlen(buffer), 0, (struct sockaddr *) &sin, rlen);
+    num = sendto(sd, buffer, strlen(buffer), 0, (struct sockaddr *) &remote_addr, rlen);
     if(num < 0) {
       perror("\nError sending filesize to server: ");
       close(sd);
       exit(EXIT_FAILURE);
     }
 
-    num = recvfrom(sd, buffer, sizeof(buffer), 0,(struct sockaddr *) &sin, &rlen);
+    num = recvfrom(sd, buffer, sizeof(buffer), 0,(struct sockaddr *) &remote_addr, &rlen);
     if(num < 0) {
       perror("\nError recieving from server: ");
       close(sd);
