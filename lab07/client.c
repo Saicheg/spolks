@@ -152,7 +152,7 @@ void udp_client(int sd) {
       strcpy(buffer, "0");
     }
 
-    printf("Requested file offset: %s\n", buffer);
+    //printf("Requested file offset: %s\n", buffer);
 
     rlen = sizeof(remote_addr);
 

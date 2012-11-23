@@ -10,8 +10,9 @@
 #include "common.h"
 
 void tcp_server(int sd);
-void* tcp_server_thread(void * desc);
 void udp_server(int sd);
+void* tcp_server_thread(void * desc);
+void* udp_server_thread(void * req);
 
 char *host, *service, *proto, *filename;
 struct sockaddr_in server_addr, remote_addr;
@@ -121,47 +122,68 @@ void* tcp_server_thread(void* desk){
 }
 
 void udp_server(int sd) {
-
-  off_t offset = 0;          /* file offset */
+  pthread_t th;
   int num;
-  char buf[BUF_SIZE];
-  struct stat st;
-  long long size;
-  size_t bytes_read, bytes_sent;
+
+  while(1) {
+    struct request_udp * req = (struct request_udp*) calloc(1, sizeof(struct request_udp));
+    req->rbuflen = sizeof(req->rbuf[0]) * sizeof(req->rbuf);
+    req->rlen = sizeof(struct sockaddr_in);
+    req->rsock = sd;
+    num = recvfrom(sd,
+                   req->rbuf,
+                   req->rbuflen,
+                   0,
+                   (struct sockaddr*) &(req->raddr),
+                   &req->rlen);
+    if(num > 0) {
+      pthread_create(&th, NULL, udp_server_thread, req);
+    }
+  }
+}
+
+void* udp_server_thread(void * req) {
+  printf("THREAD: Created thread %zd\n", pthread_self());
+  struct request_udp * request = (struct request_udp *) req;
   FILE* fd;
+  struct stat st;
+  size_t size;
+  off_t offset = 0;          /* file offset */
+  size_t bytes_read, bytes_sent;
+  char buf[BUF_SIZE];
 
   fd = fopen(filename, "r");
   if(fd == NULL) {
     perror("\nError opening file: ");
-    close(sd);
-    exit(EXIT_FAILURE);
+    return NULL;
   }
 
   stat(filename, &st);
   size = st.st_size;
 
-  while(1) {
-    rlen = sizeof(remote_addr);
-    num = recvfrom(sd, buf, sizeof(buf), 0, (struct sockaddr*) &remote_addr, &rlen);
-
-    if(num > 0) {
-      offset = atoi(buf);
-      printf("Request with offset: %lu\n", offset);
-      if(offset < size) {
-        fseek(fd, offset, SEEK_SET);
-        bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
-        bytes_sent = sendto(sd, buf, bytes_read, 0, (struct sockaddr *) &remote_addr, rlen);
-        if (bytes_sent < 0) {
-          perror("\nError sending data: ");
-          continue;
-        }
-      } else {
-        bytes_sent = sendto(sd, end_message, sizeof(end_message), 0, (struct sockaddr *) &remote_addr, rlen);
-        if (bytes_sent < 0) {
-          perror("\nError sending EOF message: ");
-          continue;
-        }
-      }
+  offset = atoi(request->rbuf);
+  //printf("Request with offset: %lu\n", offset);
+  if(offset < size) {
+    fseek(fd, offset, SEEK_SET);
+    bytes_read = fread(buf, sizeof(buf[0]), sizeof(buf), fd);
+    bytes_sent = sendto(request->rsock, buf, bytes_read, 0, (struct sockaddr *) &(request->raddr), request->rlen);
+    if (bytes_sent < 0) {
+      perror("\nError sending data: ");
+      fclose(fd);
+      free(request);
+      return NULL;
+    }
+  } else {
+    bytes_sent = sendto(request->rsock, end_message, sizeof(end_message), 0, (struct sockaddr *) &(request->raddr), request->rlen);
+    if (bytes_sent < 0) {
+      perror("\nError sending EOF message: ");
+      fclose(fd);
+      free(request);
+      return NULL;
     }
   }
+
+  fclose(fd);
+  free(request);
+  return NULL;
 }
