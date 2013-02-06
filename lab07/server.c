@@ -20,6 +20,7 @@ socklen_t rlen;
 
 int main(int argc, char* argv[]) {
   int sd;
+  int one = 1;
 
   proto = argv[1];
   host = argv[2];
@@ -37,6 +38,7 @@ int main(int argc, char* argv[]) {
     exit(EXIT_FAILURE);
   }
 
+  setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(int));
   printf("Server started...\n");
 
   if (strcmp(proto, "udp") == 0) {
@@ -50,37 +52,37 @@ int main(int argc, char* argv[]) {
 }
 
 void tcp_server(int sd) {
-  int desc;
   pthread_t th;
   //pthread_attr_t ta;
 
   while(1) {
+    int * desc = (int*) calloc(1, sizeof(int));
     rlen = sizeof(struct sockaddr_in);
-    desc = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
-    if (desc == -1) {
+    desc[0] = accept(sd, (struct sockaddr*) &remote_addr, &rlen);
+    if (desc[0] == -1) {
       perror("\nConnection error: ");
       continue;
     }
-    pthread_create(&th, NULL, tcp_server_thread, &desc);
+    pthread_create(&th, NULL, tcp_server_thread, desc);
   }
 }
 
-void* tcp_server_thread(void* desk){
-  int rsd = *(int*)desk;
+void* tcp_server_thread(void* desc){
+  int rsd = *(int*)desc;
+  free(desc);
   printf("THREAD: Created thread %zd\n", pthread_self());
   off_t offset = 0;  //file offset
   FILE* fd;
   char buf[BUF_SIZE];
 
   // Read file start offset
-  if(read(rsd, buf, sizeof(buf)*sizeof(buf[0])) > 0 ) {
-    offset = atoi(buf);
-    printf("Requested start offset: %lu\n", offset);
-  } else {
+  if(read(rsd, buf, sizeof(buf) * sizeof(buf[0])) == -1 ) {
     perror("\nError getting start file offset: ");
     close(rsd);
     return NULL;
   }
+  offset = atoi(buf);
+  printf("Requested start offset: %lu\n", offset);
 
   fd = fopen(filename, "r");
   if(fd == NULL) {
@@ -155,6 +157,7 @@ void* udp_server_thread(void * req) {
   fd = fopen(filename, "r");
   if(fd == NULL) {
     perror("\nError opening file: ");
+    free(request);
     return NULL;
   }
 
