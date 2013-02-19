@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <netinet/ip_icmp.h>
 #include <netdb.h>
+#include <errno.h>
 
 #include "pinger.h"
 
@@ -23,7 +24,12 @@ int main_pinger(const char* source_address_string,
                 int ttl,
                 int listen);
 void main_pinger_sender(int signal_number);
+void main_pinger_receiver(char *packet_buffer,
+                          int packet_length,
+                          struct sockaddr_in *from);
+
 u_int16_t data_checksum(u_short* data, size_t length);
+char * data_icmp_packet_type(int t);
 
 int socket_descriptor;
 
@@ -31,6 +37,8 @@ int request_packet_source_address;
 int request_packet_destination_address;
 int request_packet_pid;
 int request_packet_ttl;
+
+char received_packet[RECEIVED_PACKET_BUFFER_SIZE];
 
 struct sockaddr_in destination_address;
 struct sockaddr_in source_address;
@@ -119,6 +127,8 @@ int main_pinger(const char* source_address_string,
                 const char* destination_address_string,
                 int ttl,
                 int listen) {
+    struct sockaddr_in from;
+
     if (ttl < 1) {
         ttl = 1;
     }
@@ -194,12 +204,29 @@ int main_pinger(const char* source_address_string,
     setitimer(ITIMER_REAL, &timer, NULL);
 
     while (sender_stop_flag == 0) {
-        sleep(1);
+        int received_packet_buffer_length = sizeof(received_packet);
+        socklen_t fromlen = sizeof(from);
+        int received_bytes;
+
+        if ((received_bytes = recvfrom(socket_descriptor,
+                                       received_packet,
+                                       received_packet_buffer_length,
+                                       0,
+                                       (struct sockaddr*) &from,
+                                       &fromlen)) < 0) {
+            if (errno == EINTR)
+                continue;
+            perror("Receive packet error");
+            continue;
+        }
+        main_pinger_receiver(received_packet, received_bytes, &from);
     }
 
-    printf("Packets sent: %d\n", sender_packets_sent);
-
-    //TODO:Everything else
+    printf("--- Stats ---\n");
+    printf("%d packets sent, %d received, %0.1f%% loss\n",
+           sender_packets_sent,
+           statistics_packets_received,
+           (double) (sender_packets_sent - statistics_packets_received) * 100.0 / sender_packets_sent);
 
     return 0;
 }
@@ -253,4 +280,86 @@ u_int16_t data_checksum(u_short* data, size_t length) {
     sum += (sum >> 16);
     answer = ~sum;
     return(answer);
+}
+
+void main_pinger_receiver(char *packet_buffer, int packet_length, struct sockaddr_in *from) {
+    struct ip *ip_packet;
+    struct icmp *icmp_packet;
+    int ip_header_length;
+    struct timeval current_time, *packet_time, trip_time;
+
+    gettimeofday(&current_time, NULL);
+
+    ip_packet = (struct ip *) packet_buffer;
+    ip_header_length = ip_packet->ip_hl << 2;
+    if (packet_length < ip_header_length + ICMP_MINLEN) {
+        printf("packet too short (%d bytes) from %s\n", packet_length,
+               inet_ntoa(from->sin_addr));
+        return;
+    }
+    packet_length -= ip_header_length;
+    icmp_packet = (struct icmp *) (packet_buffer + ip_header_length);
+
+    if (icmp_packet->icmp_type != ICMP_ECHOREPLY) {
+        /*
+            printf("%d bytes from %s: icmp_type=%d (%s) icmp_code=%d\n",
+                   packet_length,
+                   inet_ntoa(from->sin_addr),
+                   icmp_packet->icmp_type,
+                   data_icmp_packet_type(icmp_packet->icmp_type),
+                   icmp_packet->icmp_code);
+         */
+        return;
+    }
+
+    if (icmp_packet->icmp_id != request_packet_pid)
+        return;
+
+    packet_time = (struct timeval *) &icmp_packet->icmp_data[0];
+    timersub(&current_time, packet_time, &trip_time);
+
+    double current_time_ms = trip_time.tv_sec * 1000 + (double) trip_time.tv_usec / 1000;
+
+
+    printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.1f ms\n",
+           packet_length,
+           inet_ntoa(from->sin_addr),
+           ip_packet->ip_ttl,
+           icmp_packet->icmp_seq,
+           current_time_ms);
+    fflush(stdout);
+
+    statistics_ping_sum += current_time_ms;
+    if (statistics_packets_received == 0 || statistics_ping_min > current_time_ms)
+        statistics_ping_min = current_time_ms;
+    if (statistics_ping_max < current_time_ms)
+        statistics_ping_max = current_time_ms;
+    statistics_packets_received++;
+}
+
+char * data_icmp_packet_type(int t) {
+    static char *ttab[] = {
+                           "Echo Reply",
+                           "ICMP 1",
+                           "ICMP 2",
+                           "Dest Unreachable",
+                           "Source Quench",
+                           "Redirect",
+                           "ICMP 6",
+                           "ICMP 7",
+                           "Echo",
+                           "ICMP 9",
+                           "ICMP 10",
+                           "Time Exceeded",
+                           "Parameter Problem",
+                           "Timestamp",
+                           "Timestamp Reply",
+                           "Info Request",
+                           "Info Reply"
+    };
+
+    if (t < 0 || t > 16)
+        return("unknown");
+
+    return(ttab[t]);
 }

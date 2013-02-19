@@ -16,6 +16,8 @@
 #define PINGER_EXITERROR_SOURCE_ADDRESS 3
 #define PINGER_EXITERROR_SOCKET_CREATE 4
 
+#define RECEIVED_PACKET_BUFFER_SIZE 65535
+
 struct icmp_custom_packet {
   u_int8_t icmp_type;
   u_int8_t icmp_code;
