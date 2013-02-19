@@ -43,7 +43,6 @@ char received_packet[RECEIVED_PACKET_BUFFER_SIZE];
 struct sockaddr_in destination_address;
 struct sockaddr_in source_address;
 
-
 int sender_packets_sent = 0;
 int sender_stop_flag = 0;
 
@@ -53,6 +52,7 @@ double statistics_ping_sum;
 int statistics_packets_received;
 
 int catcher_listen_all;
+int verbose = 0;
 
 int main(int argc, char ** argv) {
     struct arg_str *argument_address_source = arg_str0("s",
@@ -73,6 +73,9 @@ int main(int argc, char ** argv) {
                                                             NULL,
                                                             "<destination-address>",
                                                             "Address to ping.");
+    struct arg_lit *argument_verbose = arg_lit0("v",
+                                                "verbose",
+                                                "Display more information.");
     struct arg_end *argument_end = arg_end(20);
 
 
@@ -81,6 +84,7 @@ int main(int argc, char ** argv) {
                                argument_address_source,
                                argument_ttl,
                                argument_address_destination,
+                               argument_verbose,
                                argument_help,
                                argument_end
     };
@@ -90,17 +94,17 @@ int main(int argc, char ** argv) {
         exit(PINGER_EXITERROR_PARAMETERS);
     }
 
-    argument_ttl->ival[0] = 255;
-    argument_address_source->sval[0] = NULL;
-
-    int parse_errors_count = arg_parse(argc, argv, arguments_table);
-
     if (argc == 1) {
         printf("Usage: %s", PROGRAM_NAME);
         arg_print_syntax(stdout, arguments_table, "\n");
         printf("Try using %s --help for more information.\n", PROGRAM_NAME);
         exit(EXIT_SUCCESS);
     }
+
+    argument_ttl->ival[0] = 255;
+    argument_address_source->sval[0] = NULL;
+
+    int parse_errors_count = arg_parse(argc, argv, arguments_table);
 
     if (argument_help->count > 0) {
         printf("Usage: %s", PROGRAM_NAME);
@@ -114,6 +118,8 @@ int main(int argc, char ** argv) {
         fprintf(stderr, "Try using --help option for more information on calling arguments.\n");
         exit(PINGER_EXITERROR_PARAMETERS);
     }
+
+    verbose = argument_verbose->count;
 
     int code = main_pinger(argument_address_source->sval[0],
                            argument_address_destination->sval[0],
@@ -135,12 +141,6 @@ int main_pinger(const char* source_address_string,
     if (ttl > 255) {
         ttl = 255;
     }
-
-    printf("Arguments:\n");
-    printf("  source: %s\n", source_address_string);
-    printf("  destination: %s\n", destination_address_string);
-    printf("  TTL: %d\n", ttl);
-    printf("  listen: %s\n", listen > 0 ? "yes" : "no");
 
     request_packet_pid = getpid();
     catcher_listen_all = listen;
@@ -167,7 +167,6 @@ int main_pinger(const char* source_address_string,
     int error_code;
     error_code = getaddrinfo(destination_address_string, NULL, NULL, &destination_addrinfo);
     if (error_code != 0) {
-
         printf("Destination address was not resolved: %s.\n", gai_strerror(error_code));
         return PINGER_EXITERROR_DESTINATION_ADDRESS;
     }
@@ -182,7 +181,6 @@ int main_pinger(const char* source_address_string,
         struct addrinfo *source_addrinfo;
         error_code = getaddrinfo(source_address_string, NULL, NULL, &source_addrinfo);
         if (error_code != 0) {
-
             printf("Source address was not resolved: %s.\n", gai_strerror(error_code));
             return PINGER_EXITERROR_SOURCE_ADDRESS;
         }
@@ -190,6 +188,13 @@ int main_pinger(const char* source_address_string,
         freeaddrinfo(source_addrinfo);
     } else {
         source_address.sin_addr.s_addr = INADDR_ANY;
+    }
+
+    if (verbose) {
+        printf("Arguments:\n");
+        printf("  source: %s\n", source_address_string);
+        printf("  destination: %s\n", destination_address_string);
+        printf("  TTL: %d\n", ttl);
     }
 
     // inet_ntoa uses ONE string buffer
@@ -227,7 +232,6 @@ int main_pinger(const char* source_address_string,
            sender_packets_sent,
            statistics_packets_received,
            (double) (sender_packets_sent - statistics_packets_received) * 100.0 / sender_packets_sent);
-
     return 0;
 }
 
@@ -251,10 +255,8 @@ void main_pinger_sender(int signal_number) {
                0,
                (const struct sockaddr*) &destination_address,
                sizeof(struct sockaddr_in));
-
     } else if (signal_number == SIGINT) {
         sender_stop_flag = 1;
-
     }
 }
 
@@ -271,7 +273,6 @@ u_int16_t data_checksum(u_short* data, size_t length) {
 
     if (nleft == 1) {
         u_short u = 0;
-
         *(u_char *) (&u) = *(u_char *) w;
         sum += u;
     }
@@ -293,22 +294,25 @@ void main_pinger_receiver(char *packet_buffer, int packet_length, struct sockadd
     ip_packet = (struct ip *) packet_buffer;
     ip_header_length = ip_packet->ip_hl << 2;
     if (packet_length < ip_header_length + ICMP_MINLEN) {
-        printf("packet too short (%d bytes) from %s\n", packet_length,
-               inet_ntoa(from->sin_addr));
+        if (verbose) {
+            printf("packet too short (%d bytes) from %s\n",
+                   packet_length,
+                   inet_ntoa(from->sin_addr));
+        }
         return;
     }
     packet_length -= ip_header_length;
     icmp_packet = (struct icmp *) (packet_buffer + ip_header_length);
 
     if (icmp_packet->icmp_type != ICMP_ECHOREPLY) {
-        /*
+        if (verbose) {
             printf("%d bytes from %s: icmp_type=%d (%s) icmp_code=%d\n",
                    packet_length,
                    inet_ntoa(from->sin_addr),
                    icmp_packet->icmp_type,
                    data_icmp_packet_type(icmp_packet->icmp_type),
                    icmp_packet->icmp_code);
-         */
+        }
         return;
     }
 
@@ -317,9 +321,7 @@ void main_pinger_receiver(char *packet_buffer, int packet_length, struct sockadd
 
     packet_time = (struct timeval *) &icmp_packet->icmp_data[0];
     timersub(&current_time, packet_time, &trip_time);
-
     double current_time_ms = trip_time.tv_sec * 1000 + (double) trip_time.tv_usec / 1000;
-
 
     printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.1f ms\n",
            packet_length,
@@ -357,9 +359,7 @@ char * data_icmp_packet_type(int t) {
                            "Info Request",
                            "Info Reply"
     };
-
     if (t < 0 || t > 16)
         return("unknown");
-
     return(ttab[t]);
 }
