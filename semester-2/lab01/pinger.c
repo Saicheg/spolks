@@ -197,9 +197,7 @@ int main_pinger(const char* source_address_string,
         printf("  TTL: %d\n", ttl);
     }
 
-    // inet_ntoa uses ONE string buffer
-    printf("Pinging (%s)", inet_ntoa(destination_address.sin_addr));
-    printf(" from (%s).\n", inet_ntoa(source_address.sin_addr));
+    printf("Pinging %s.\n", inet_ntoa(destination_address.sin_addr));
 
     struct itimerval timer;
     timer.it_value.tv_sec = 0;
@@ -227,7 +225,7 @@ int main_pinger(const char* source_address_string,
         main_pinger_receiver(received_packet, received_bytes, &from);
     }
 
-    printf("--- Stats ---\n");
+    printf("\n--- Stats ---\n");
     printf("%d packets sent, %d received, %0.1f%% loss\n",
            sender_packets_sent,
            statistics_packets_received,
@@ -329,7 +327,7 @@ void main_pinger_receiver(char *packet_buffer, int packet_length, struct sockadd
     timersub(&current_time, packet_time, &trip_time);
     double current_time_ms = trip_time.tv_sec * 1000 + (double) trip_time.tv_usec / 1000;
 
-    printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.2f ms\n",
+    printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.1f ms\n",
            packet_length,
            inet_ntoa(from->sin_addr),
            icmp_packet->icmp_seq,
