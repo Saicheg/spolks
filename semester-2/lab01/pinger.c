@@ -18,10 +18,28 @@
 
 #define PROGRAM_NAME "pinger"
 
-int main_pinger(const char* source_address, const char* destination_host_name, int ttl, int listen);
-void main_catcher();
+int main_pinger(const char* source_address_string,
+                const char* destination_address_string,
+                int ttl,
+                int listen);
+void main_pinger_sender(int signal_number);
+u_int16_t data_checksum(u_short* data, size_t length);
 
-int pid;
+int socket_descriptor;
+
+int request_packet_source_address;
+int request_packet_destination_address;
+int request_packet_pid;
+int request_packet_ttl;
+
+int sender_packets_sent = 0;
+int sender_stop_flag = 0;
+
+double statistics_ping_min;
+double statistics_ping_max;
+double statistics_ping_sum;
+int statistics_packets_received;
+
 int catcher_listen_all;
 
 int main(int argc, char ** argv) {
@@ -110,20 +128,20 @@ int main_pinger(const char* source_address_string,
     printf("  TTL: %d\n", ttl);
     printf("  listen: %s\n", listen > 0 ? "yes" : "no");
 
-    pid = getpid();
+    request_packet_pid = getpid();
     catcher_listen_all = listen;
 
     struct sigaction catcher_action;
     memset(&catcher_action, 0, sizeof(catcher_action));
-    catcher_action.sa_handler = &main_catcher;
+    catcher_action.sa_handler = &main_pinger_sender;
     sigaction(SIGALRM, &catcher_action, NULL);
     sigaction(SIGINT, &catcher_action, NULL);
 
-    int sd = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
+    socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
     const int on = 1;
-    setsockopt(sd, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
+    setsockopt(socket_descriptor, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
     int size = 60 * 1024;
-    setsockopt(sd, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+    setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
 
     setuid(getuid());
 
@@ -164,7 +182,7 @@ int main_pinger(const char* source_address_string,
     } else {
         source_address.sin_addr.s_addr = INADDR_ANY;
     }
-    
+
     // inet_ntoa uses ONE string buffer
     printf("Pinging (%s)", inet_ntoa(destination_address.sin_addr));
     printf(" from (%s).\n", inet_ntoa(source_address.sin_addr));
@@ -174,6 +192,47 @@ int main_pinger(const char* source_address_string,
     return 0;
 }
 
-void main_catcher() {
-    //TODO
+void main_pinger_sender(int signal_number) {
+    if (signal_number == SIGALRM && sender_stop_flag == 0) {
+        struct icmp_custom_packet *packet_icmp;
+        packet_icmp = (struct icmp_custom_packet*) calloc(1, sizeof(struct icmp_custom_packet));
+        packet_icmp->icmp_type = ICMP_ECHO;
+        packet_icmp->icmp_code = 0;
+        packet_icmp->icmp_cksum = 0;
+        packet_icmp->icmp_pid = request_packet_pid;
+        packet_icmp->icmp_seqnum = ++sender_packets_sent;
+
+        gettimeofday(&packet_icmp->icmp_timestamp, NULL);
+
+        packet_icmp->icmp_cksum = data_checksum((u_short*) packet_icmp,
+                                                sizeof(struct icmp_custom_packet));
+
+    } else if (signal_number = SIGINT) {
+        sender_stop_flag = 1;
+
+    }
+}
+
+u_int16_t data_checksum(u_short* data, size_t length) {
+    register size_t nleft = length;
+    register u_short *w = data;
+    register u_short answer;
+    register int sum = 0;
+
+    while (nleft > 1) {
+        sum += *w++;
+        nleft -= 2;
+    }
+
+    if (nleft == 1) {
+        u_short u = 0;
+
+        *(u_char *) (&u) = *(u_char *) w;
+        sum += u;
+    }
+
+    sum = (sum >> 16) + (sum & 0xffff);
+    sum += (sum >> 16);
+    answer = ~sum;
+    return(answer);
 }
