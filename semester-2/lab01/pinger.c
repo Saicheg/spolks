@@ -232,6 +232,12 @@ int main_pinger(const char* source_address_string,
            sender_packets_sent,
            statistics_packets_received,
            (double) (sender_packets_sent - statistics_packets_received) * 100.0 / sender_packets_sent);
+    if (verbose) {
+        printf("Round-trip time (ms): min %0.2f, avg %0.2f, max %0.2f\n",
+               statistics_ping_min,
+               statistics_ping_sum / sender_packets_sent,
+               statistics_ping_max);
+    }
     return 0;
 }
 
@@ -323,11 +329,11 @@ void main_pinger_receiver(char *packet_buffer, int packet_length, struct sockadd
     timersub(&current_time, packet_time, &trip_time);
     double current_time_ms = trip_time.tv_sec * 1000 + (double) trip_time.tv_usec / 1000;
 
-    printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.1f ms\n",
+    printf("%d bytes from %s: icmp_req=%d ttl=%u time=%0.2f ms\n",
            packet_length,
            inet_ntoa(from->sin_addr),
-           ip_packet->ip_ttl,
            icmp_packet->icmp_seq,
+           ip_packet->ip_ttl,
            current_time_ms);
     fflush(stdout);
 
