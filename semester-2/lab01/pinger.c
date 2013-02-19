@@ -32,6 +32,10 @@ int request_packet_destination_address;
 int request_packet_pid;
 int request_packet_ttl;
 
+struct sockaddr_in destination_address;
+struct sockaddr_in source_address;
+
+
 int sender_packets_sent = 0;
 int sender_stop_flag = 0;
 
@@ -138,19 +142,16 @@ int main_pinger(const char* source_address_string,
     sigaction(SIGINT, &catcher_action, NULL);
 
     socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
+    if (socket_descriptor == -1) {
+        perror("Socket allocation error");
+        exit(PINGER_EXITERROR_SOCKET_CREATE);
+    }
     const int on = 1;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
     int size = 60 * 1024;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
 
     setuid(getuid());
-
-    struct itimerval timer;
-    timer.it_value.tv_sec = 0;
-    timer.it_value.tv_usec = 1;
-    timer.it_interval.tv_sec = 1;
-    timer.it_interval.tv_usec = 0;
-    setitimer(ITIMER_REAL, &timer, NULL);
 
     struct addrinfo *destination_addrinfo;
     int error_code;
@@ -160,13 +161,11 @@ int main_pinger(const char* source_address_string,
         printf("Destination address was not resolved: %s.\n", gai_strerror(error_code));
         return PINGER_EXITERROR_DESTINATION_ADDRESS;
     }
-    struct sockaddr_in destination_address;
     memset(&destination_address, 0, sizeof(destination_address));
     destination_address.sin_family = AF_INET;
     destination_address.sin_addr = ((struct sockaddr_in*) destination_addrinfo->ai_addr)->sin_addr;
     freeaddrinfo(destination_addrinfo);
 
-    struct sockaddr_in source_address;
     memset(&source_address, 0, sizeof(source_address));
     source_address.sin_family = AF_INET;
     if (source_address_string != NULL) {
@@ -187,6 +186,19 @@ int main_pinger(const char* source_address_string,
     printf("Pinging (%s)", inet_ntoa(destination_address.sin_addr));
     printf(" from (%s).\n", inet_ntoa(source_address.sin_addr));
 
+    struct itimerval timer;
+    timer.it_value.tv_sec = 0;
+    timer.it_value.tv_usec = 1;
+    timer.it_interval.tv_sec = 1;
+    timer.it_interval.tv_usec = 0;
+    setitimer(ITIMER_REAL, &timer, NULL);
+
+    while (sender_stop_flag == 0) {
+        sleep(1);
+    }
+
+    printf("Packets sent: %d\n", sender_packets_sent);
+
     //TODO:Everything else
 
     return 0;
@@ -206,8 +218,14 @@ void main_pinger_sender(int signal_number) {
 
         packet_icmp->icmp_cksum = data_checksum((u_short*) packet_icmp,
                                                 sizeof(struct icmp_custom_packet));
+        sendto(socket_descriptor,
+               packet_icmp,
+               sizeof(packet_icmp[0]),
+               0,
+               (const struct sockaddr*) &destination_address,
+               sizeof(struct sockaddr_in));
 
-    } else if (signal_number = SIGINT) {
+    } else if (signal_number == SIGINT) {
         sender_stop_flag = 1;
 
     }
