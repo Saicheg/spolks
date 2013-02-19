@@ -1,7 +1,7 @@
 NAME=pinger
 
 CC=gcc
-CFLAGS=-ggdb -std=gnu99
+CFLAGS=-ggdb -std=gnu99 -Wall
 
 LIBS=-largtable2
 
