@@ -170,6 +170,7 @@ int main_pinger(const char* source_address_string,
         printf("Destination address was not resolved: %s.\n", gai_strerror(error_code));
         return PINGER_EXITERROR_DESTINATION_ADDRESS;
     }
+
     memset(&destination_address, 0, sizeof(destination_address));
     destination_address.sin_family = AF_INET;
     destination_address.sin_addr = ((struct sockaddr_in*) destination_addrinfo->ai_addr)->sin_addr;
@@ -253,6 +254,8 @@ void main_pinger_sender(int signal_number) {
 
         packet_icmp->icmp_cksum = data_checksum((u_short*) packet_icmp,
                                                 sizeof(struct icmp_custom_packet));
+
+      /* TODO: source and desctination addresses here */
         sendto(socket_descriptor,
                packet_icmp,
                sizeof(packet_icmp[0]),

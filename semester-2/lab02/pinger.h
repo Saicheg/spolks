@@ -1,4 +1,4 @@
-/* 
+/*
  * File:   pinger.h
  * Author: keritaf
  *
@@ -25,6 +25,14 @@ struct icmp_custom_packet {
   u_int16_t icmp_pid;
   u_int16_t icmp_seqnum;
   struct timeval icmp_timestamp;
+};
+
+struct pseudoip {
+  u_int32_t source_address;
+  u_int32_t dest_address;
+  unsigned char place_holder;
+  unsigned char protocol;
+  u_int16_t length;
 };
 
 #endif	/* PINGER_H */
