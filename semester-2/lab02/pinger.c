@@ -53,7 +53,8 @@ double statistics_ping_max;
 double statistics_ping_sum;
 int statistics_packets_received;
 
-int catcher_listen_all;
+int catcher_listen_all = 0;
+int source_address_set = 0;
 int verbose = 0;
 
 int main(int argc, char ** argv) {
@@ -122,6 +123,8 @@ int main(int argc, char ** argv) {
     }
 
     verbose = argument_verbose->count;
+    source_address_set = argument_address_source->count;
+    catcher_listen_all = argument_listen->count;
 
     int code = main_pinger(argument_address_source->sval[0],
                            argument_address_destination->sval[0],
@@ -144,6 +147,7 @@ int main_pinger(const char* source_address_string,
         ttl = 255;
     }
 
+    request_packet_ttl = ttl;
     request_packet_pid = getpid();
     catcher_listen_all = listen;
 
@@ -153,7 +157,7 @@ int main_pinger(const char* source_address_string,
     sigaction(SIGALRM, &catcher_action, NULL);
     sigaction(SIGINT, &catcher_action, NULL);
 
-    socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_RAW);
+    socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
 
     if (socket_descriptor == -1) {
         perror("Socket allocation error");
@@ -166,7 +170,9 @@ int main_pinger(const char* source_address_string,
     setsockopt(socket_descriptor, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
     int size = 60 * 1024;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
-    setsockopt(socket_descriptor, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
+    if (source_address_set > 0) {
+        setsockopt(socket_descriptor, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
+    }
 
     setuid(getuid());
 
@@ -187,15 +193,11 @@ int main_pinger(const char* source_address_string,
     source_address.sin_family = AF_INET;
 
     if (source_address_string != NULL) {
-        struct addrinfo *source_addrinfo;
-        error_code = getaddrinfo(source_address_string, NULL, NULL, &source_addrinfo);
-        if (error_code != 0) {
-            printf("Source address was not resolved: %s.\n", gai_strerror(error_code));
+        error_code = inet_aton(source_address_string, &source_address.sin_addr);
+        if (error_code == 0) {
+            printf("Unable to parse source IP address.\n");
             return PINGER_EXITERROR_SOURCE_ADDRESS;
         }
-        source_address.sin_addr = ((struct sockaddr_in*) source_addrinfo->ai_addr)->sin_addr;
-        /* printf("%s\n", inet_ntoa(source_address.sin_addr)); */
-        freeaddrinfo(source_addrinfo);
     } else {
         source_address.sin_addr.s_addr = INADDR_ANY;
     }
@@ -253,31 +255,47 @@ void main_pinger_sender(int signal_number) {
 
     if (signal_number == SIGALRM && sender_stop_flag == 0) {
 
-      /* Go see this article http://cboard.cprogramming.com/networking-device-communication/107801-linux-raw-socket-programming.html */
+        /* Go see this article http://cboard.cprogramming.com/networking-device-communication/107801-linux-raw-socket-programming.html */
 
-      u_int32_t srcaddr = source_address.sin_addr.s_addr;
-      u_int32_t dstaddr = destination_address.sin_addr.s_addr;
+        char* packet;
+        struct icmp_custom_packet *icmp;
+        struct iphdr * ip;
 
-      char* packet = calloc(1, sizeof(struct iphdr) + sizeof(struct icmphdr));
+        if (source_address_set > 0) {
+            u_int32_t srcaddr = source_address.sin_addr.s_addr;
+            u_int32_t dstaddr = destination_address.sin_addr.s_addr;
 
-      struct iphdr *ip = (struct iphdr*) packet;
-      struct icmp_custom_packet *icmp  = (struct icmp_custom_packet*) packet + sizeof(struct iphdr);
 
-        /* IP header */
+            printf("%s", inet_ntoa(source_address.sin_addr));
+            printf("-> %s\n", inet_ntoa(destination_address.sin_addr));
 
-        ip->ihl = 5;
-        ip->version = 4;
-        ip->tos = 0;
-        ip->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmp_custom_packet));
-        ip->id = 0;
-        ip->frag_off = 0;
-        ip->ttl = 255;
-        ip->protocol = IPPROTO_ICMP;
-        ip->check = 0;
-        ip->saddr = srcaddr;
-        ip->daddr = dstaddr;
-        ip->check = data_checksum((unsigned short *)ip, sizeof(struct iphdr));
+            packet = calloc(1, sizeof(struct iphdr) + sizeof(struct icmp_custom_packet));
 
+            ip = (struct iphdr*) packet;
+            icmp = (struct icmp_custom_packet*) ((void*) packet + sizeof(struct iphdr));
+
+            /* IP header */
+
+            ip->ihl = 5;
+            ip->version = IPVERSION;
+            ip->tos = 0;
+            ip->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmp_custom_packet));
+            ip->id = 0;
+            ip->frag_off = 0;
+            ip->ttl = request_packet_ttl;
+            ip->protocol = IPPROTO_ICMP;
+            ip->saddr = srcaddr;
+            ip->daddr = dstaddr;
+            ip->check = 0;
+            ip->check = data_checksum((unsigned short *) ip, sizeof(struct iphdr));
+        } else {
+            setsockopt(socket_descriptor,
+                       IPPROTO_IP,
+                       IP_TTL,
+                       &request_packet_ttl,
+                       sizeof(int));
+            icmp = (struct icmp_custom_packet*) calloc(1, sizeof(struct icmp_custom_packet));
+        }
 
         /* ICMP packet */
 
@@ -291,16 +309,31 @@ void main_pinger_sender(int signal_number) {
 
         icmp->icmp_cksum = data_checksum((u_short*) icmp, sizeof(struct icmp_custom_packet));
 
-        /* Checksum for IP */
 
-        ip->check = data_checksum((u_short*) ip, sizeof(struct iphdr));
+        size_t bytes_sent;
+        if (source_address_set > 0) {
+            bytes_sent = sendto(socket_descriptor,
+                                packet,
+                                ip->tot_len,
+                                0,
+                                (const struct sockaddr*) &destination_address,
+                                sizeof(struct sockaddr_in));
+        } else {
+            bytes_sent = sendto(socket_descriptor,
+                                icmp,
+                                sizeof(struct icmp_custom_packet),
+                                0,
+                                (const struct sockaddr*) &destination_address,
+                                sizeof(struct sockaddr_in));
 
-        sendto(socket_descriptor,
-               packet,
-               ip->tot_len,
-               0,
-               (const struct sockaddr*) &destination_address,
-               sizeof(struct sockaddr_in));
+        }
+        if (verbose > 0) {
+            printf("Sent %zd bytes.\n", bytes_sent);
+        }
+        if (bytes_sent == -1)
+            perror("");
+        /*
+         */
     } else if (signal_number == SIGINT) {
         sender_stop_flag = 1;
     }
