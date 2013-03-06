@@ -314,7 +314,7 @@ void main_pinger_sender(int signal_number) {
         if (source_address_set > 0) {
             bytes_sent = sendto(socket_descriptor,
                                 packet,
-                                ip->tot_len,
+                                sizeof(struct iphdr)+sizeof(struct icmp_custom_packet),
                                 0,
                                 (const struct sockaddr*) &destination_address,
                                 sizeof(struct sockaddr_in));
