@@ -14,6 +14,7 @@
 #include <netinet/ip_icmp.h>
 #include <netdb.h>
 #include <errno.h>
+#include <netinet/tcp.h>
 
 #include "pinger.h"
 
@@ -45,6 +46,8 @@ struct sockaddr_in source_address;
 
 int sender_packets_sent = 0;
 int sender_stop_flag = 0;
+
+const int on = 1;
 
 double statistics_ping_min;
 double statistics_ping_max;
@@ -156,7 +159,6 @@ int main_pinger(const char* source_address_string,
         perror("Socket allocation error");
         exit(PINGER_EXITERROR_SOCKET_CREATE);
     }
-    const int on = 1;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
     int size = 60 * 1024;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
@@ -241,24 +243,55 @@ int main_pinger(const char* source_address_string,
 }
 
 void main_pinger_sender(int signal_number) {
+
     if (signal_number == SIGALRM && sender_stop_flag == 0) {
-        struct icmp_custom_packet *packet_icmp;
-        packet_icmp = (struct icmp_custom_packet*) calloc(1, sizeof(struct icmp_custom_packet));
-        packet_icmp->icmp_type = ICMP_ECHO;
-        packet_icmp->icmp_code = 0;
-        packet_icmp->icmp_cksum = 0;
-        packet_icmp->icmp_pid = request_packet_pid;
-        packet_icmp->icmp_seqnum = ++sender_packets_sent;
 
-        gettimeofday(&packet_icmp->icmp_timestamp, NULL);
+      /* Go see this article http://cboard.cprogramming.com/networking-device-communication/107801-linux-raw-socket-programming.html */
 
-        packet_icmp->icmp_cksum = data_checksum((u_short*) packet_icmp,
-                                                sizeof(struct icmp_custom_packet));
+      u_int32_t srcaddr = source_address.sin_addr.s_addr;
+      u_int32_t dstaddr = destination_address.sin_addr.s_addr;
 
-      /* TODO: source and desctination addresses here */
+      char* packet = calloc(1, sizeof(struct iphdr) + sizeof(struct icmphdr));
+
+      struct iphdr *ip = (struct iphdr*) packet;
+      struct icmp_custom_packet *icmp  = (struct icmp_custom_packet*) packet + sizeof(struct iphdr);
+
+        /* IP header */
+
+        ip->ihl = 5;
+        ip->version = 4;
+        ip->tos = 0;
+        ip->tot_len = htons(sizeof(struct iphdr) + sizeof(struct icmp_custom_packet));
+        ip->id = 0;
+        ip->frag_off = 0;
+        ip->ttl = 255;
+        ip->protocol = IPPROTO_ICMP;
+        ip->check = 0;
+        ip->check = data_checksum((unsigned short *)ip, sizeof(struct iphdr));
+        ip->saddr = srcaddr;
+        ip->daddr = dstaddr;
+
+        setsockopt(socket_descriptor, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
+
+        /* ICMP packet */
+
+        icmp->icmp_type = ICMP_ECHO;
+        icmp->icmp_code = 0;
+        icmp->icmp_cksum = 0;
+        icmp->icmp_pid = request_packet_pid;
+        icmp->icmp_seqnum = ++sender_packets_sent;
+
+        gettimeofday(&icmp->icmp_timestamp, NULL);
+
+        icmp->icmp_cksum = data_checksum((u_short*) icmp, sizeof(struct icmp_custom_packet));
+
+        /* Checksum for IP */
+
+        ip->check = data_checksum((u_short*) ip, sizeof(struct iphdr));
+
         sendto(socket_descriptor,
-               packet_icmp,
-               sizeof(packet_icmp[0]),
+               packet,
+               ip->tot_len,
                0,
                (const struct sockaddr*) &destination_address,
                sizeof(struct sockaddr_in));
@@ -370,3 +403,4 @@ char * data_icmp_packet_type(int t) {
         return("unknown");
     return(ttab[t]);
 }
+
