@@ -47,7 +47,6 @@ struct sockaddr_in source_address;
 int sender_packets_sent = 0;
 int sender_stop_flag = 0;
 
-const int on = 1;
 
 double statistics_ping_min;
 double statistics_ping_max;
@@ -154,14 +153,20 @@ int main_pinger(const char* source_address_string,
     sigaction(SIGALRM, &catcher_action, NULL);
     sigaction(SIGINT, &catcher_action, NULL);
 
-    socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_ICMP);
+    socket_descriptor = socket(PF_INET, SOCK_RAW, IPPROTO_RAW);
+
     if (socket_descriptor == -1) {
         perror("Socket allocation error");
         exit(PINGER_EXITERROR_SOCKET_CREATE);
     }
+
+    const int on = 1;
+
+    /* Socket options */
     setsockopt(socket_descriptor, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on));
     int size = 60 * 1024;
     setsockopt(socket_descriptor, SOL_SOCKET, SO_RCVBUF, &size, sizeof(size));
+    setsockopt(socket_descriptor, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
 
     setuid(getuid());
 
@@ -180,6 +185,7 @@ int main_pinger(const char* source_address_string,
 
     memset(&source_address, 0, sizeof(source_address));
     source_address.sin_family = AF_INET;
+
     if (source_address_string != NULL) {
         struct addrinfo *source_addrinfo;
         error_code = getaddrinfo(source_address_string, NULL, NULL, &source_addrinfo);
@@ -188,6 +194,7 @@ int main_pinger(const char* source_address_string,
             return PINGER_EXITERROR_SOURCE_ADDRESS;
         }
         source_address.sin_addr = ((struct sockaddr_in*) source_addrinfo->ai_addr)->sin_addr;
+        /* printf("%s\n", inet_ntoa(source_address.sin_addr)); */
         freeaddrinfo(source_addrinfo);
     } else {
         source_address.sin_addr.s_addr = INADDR_ANY;
@@ -267,11 +274,10 @@ void main_pinger_sender(int signal_number) {
         ip->ttl = 255;
         ip->protocol = IPPROTO_ICMP;
         ip->check = 0;
-        ip->check = data_checksum((unsigned short *)ip, sizeof(struct iphdr));
         ip->saddr = srcaddr;
         ip->daddr = dstaddr;
+        ip->check = data_checksum((unsigned short *)ip, sizeof(struct iphdr));
 
-        setsockopt(socket_descriptor, IPPROTO_IP, IP_HDRINCL, &on, sizeof(on));
 
         /* ICMP packet */
 
