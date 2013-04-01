@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+
+require_relative 'lib/client'
+
+Thread.abort_on_exception = true
+
+client = Client.new
+client.listen
+
+begin
+  loop { client.transmit(gets.chomp) }
+rescue Interrupt => e
+  puts 'Bye-bye'
+end
