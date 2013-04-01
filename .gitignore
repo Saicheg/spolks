@@ -16,4 +16,6 @@
 *.a
 *.run
 
+.rvmrc
+
 /test
