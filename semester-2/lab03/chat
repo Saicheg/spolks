@@ -2,13 +2,14 @@
 
 require_relative 'lib/client'
 
+trap(:INT) do
+  puts "\nBye-bye"
+  abort
+end
+
 Thread.abort_on_exception = true
 
 client = Client.new
 client.listen
 
-begin
-  loop { client.transmit(gets.chomp) }
-rescue Interrupt => e
-  puts 'Bye-bye'
-end
+loop { client.transmit(gets.chomp) }
