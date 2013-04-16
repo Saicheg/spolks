@@ -64,26 +64,71 @@ void masterCalculateOnSlaves() {
 
     MPI_Bcast(B, N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    for (int i = 0; i < workers_count; i++) {
-        int current_worker_block_size = block_size;
-        if (i == workers_count - 1)
-            current_worker_block_size = last_worker_block_size;
+    if (async == 0) {
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Send(&current_worker_block_size, 1, MPI_INT, i + 1, TAG_BLOCK_SIZE, MPI_COMM_WORLD);
+        }
 
-        MPI_Send(&current_worker_block_size, 1, MPI_INT, i + 1, TAG_BLOCK_SIZE, MPI_COMM_WORLD);
+    } else {
+
+        MPI_Request *requests = calloc(workers_count, sizeof(MPI_Request));
+        MPI_Status *statuses = calloc(workers_count, sizeof(MPI_Status));
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Isend(&current_worker_block_size, 1, MPI_INT, i + 1, TAG_BLOCK_SIZE, MPI_COMM_WORLD, &requests[i]);
+        }
+        MPI_Waitall(workers_count, requests, statuses);
+        free(requests);
+        free(statuses);
     }
 
-    for (int i = 0; i < workers_count; i++) {
-        int current_worker_block_size = block_size;
-        if (i == workers_count - 1)
-            current_worker_block_size = last_worker_block_size;
-        MPI_Send(&(A[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_FIRST, MPI_COMM_WORLD);
+
+    if (async == 0) {
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Send(&(A[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_FIRST, MPI_COMM_WORLD);
+        }
+    } else {
+        MPI_Request *requests = calloc(workers_count, sizeof(MPI_Request));
+        MPI_Status *statuses = calloc(workers_count, sizeof(MPI_Status));
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Isend(&(A[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_FIRST, MPI_COMM_WORLD, &requests[i]);
+        }
+        MPI_Waitall(workers_count, requests, statuses);
+        free(requests);
+        free(statuses);
     }
 
-    for (int i = 0; i < workers_count; i++) {
-        int current_worker_block_size = block_size;
-        if (i == workers_count - 1)
-            current_worker_block_size = last_worker_block_size;
-        MPI_Recv(&(C[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    if (async == 0) {
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Recv(&(C[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_RESULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        }
+    } else {
+        MPI_Request *requests = calloc(workers_count, sizeof(MPI_Request));
+        MPI_Status *statuses = calloc(workers_count, sizeof(MPI_Status));
+        for (int i = 0; i < workers_count; i++) {
+            int current_worker_block_size = block_size;
+            if (i == workers_count - 1)
+                current_worker_block_size = last_worker_block_size;
+            MPI_Irecv(&(C[N * i * block_size]), current_worker_block_size * N, MPI_DOUBLE, i + 1, TAG_MATRIX_RESULT, MPI_COMM_WORLD, &requests[i]);
+        }
+        MPI_Waitall(workers_count, requests, statuses);
+        free(requests);
+        free(statuses);
+
     }
 }
 
@@ -91,23 +136,43 @@ void slavePrepareMemory() {
     B = malloc(N * N * sizeof(double));
     MPI_Bcast(B, N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-    MPI_Recv(&block_size, 1, MPI_INT, 0, TAG_BLOCK_SIZE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    if (async == 0) {
+        MPI_Recv(&block_size, 1, MPI_INT, 0, TAG_BLOCK_SIZE, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } else {
+        MPI_Request request;
+        MPI_Status status;
+        MPI_Irecv(&block_size, 1, MPI_INT, 0, TAG_BLOCK_SIZE, MPI_COMM_WORLD, &request);
+        MPI_Wait(&request, &status);
+    }
     A = malloc(block_size * N * sizeof(double));
-    
+
     C = calloc(block_size * N, sizeof(double));
 }
 
 void slaveCalculateBlock() {
-    MPI_Recv(A, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_FIRST, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    if (async == 0) {
+        MPI_Recv(A, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_FIRST, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    } else {
+        MPI_Request request;
+        MPI_Status status;
+        MPI_Irecv(A, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_FIRST, MPI_COMM_WORLD, &request);
+        MPI_Wait(&request, &status);
+    }
     for (int i = 0; i < block_size; i++) {
         for (int j = 0; j < N; j++) {
-            for (int k = 0; k < N; k++)
-            {
-                C[i*N + j] += A[i*N + k] * B[j*N + k];
+            for (int k = 0; k < N; k++) {
+                C[i * N + j] += A[i * N + k] * B[j * N + k];
             }
         }
     }
-    MPI_Send(C, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_RESULT, MPI_COMM_WORLD);
+    if (async == 0) {
+        MPI_Send(C, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_RESULT, MPI_COMM_WORLD);
+    } else {
+        MPI_Request request;
+        MPI_Status status;
+        MPI_Isend(C, block_size * N, MPI_DOUBLE, 0, TAG_MATRIX_RESULT, MPI_COMM_WORLD, &request);
+        MPI_Wait(&request, &status);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -122,7 +187,6 @@ int main(int argc, char *argv[]) {
 
 
     double startTime, endTime;
-    int numElements, offset, stripSize, i, j, k;
 
     MPI_Init(&argc, &argv);
 
@@ -136,81 +200,17 @@ int main(int argc, char *argv[]) {
         masterInitMemory();
         masterInitMatrix();
         masterCalculateOnSelf();
-        MPI_Barrier(MPI_COMM_WORLD);
+        startTime = MPI_Wtime();
         masterCalculateOnSlaves();
+        endTime = MPI_Wtime();
+        printf("Time is %f\n", endTime - startTime);
+
         masterValidateResults();
     } else {
-        MPI_Barrier(MPI_COMM_WORLD);
         slavePrepareMemory();
         slaveCalculateBlock();
     }
-    /*
-        // start timer
-        if (current_rank == 0) {
-            startTime = MPI_Wtime();
-        
 
-        stripSize = N / current_size;
-
-        // send each node its piece of A -- note could be done via MPI_Scatter
-        if (current_rank == 0) {
-            offset = stripSize;
-            numElements = stripSize * N;
-            for (i = 1; i < current_size; i++) {
-                MPI_Send(A[offset], numElements, MPI_DOUBLE, i, TAG_DEFAULT, MPI_COMM_WORLD);
-                offset += stripSize;
-            }
-        } else { // receive my part of A
-            MPI_Recv(A[0], stripSize * N, MPI_DOUBLE, 0, TAG_DEFAULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        }
-
-        // everyone gets B
-        MPI_Bcast(B[0], N*N, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-
-        // Let each process initialize C to zero 
-        for (i = 0; i < stripSize; i++) {
-            for (j = 0; j < N; j++) {
-                C[i][j] = 0.0;
-            }
-        }
-
-        // do the work
-        for (i = 0; i < stripSize; i++) {
-            for (j = 0; j < N; j++) {
-                for (k = 0; k < N; k++) {
-                    C[i][j] += A[i][k] * B[k][j];
-                }
-            }
-        }
-
-        // master receives from workers  -- note could be done via MPI_Gather
-        if (current_rank == 0) {
-            offset = stripSize;
-            numElements = stripSize * N;
-            for (i = 1; i < current_size; i++) {
-                MPI_Recv(C[offset], numElements, MPI_DOUBLE, i, TAG_DEFAULT, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                offset += stripSize;
-            }
-        } else { // send my contribution to C
-            MPI_Send(C[0], stripSize * N, MPI_DOUBLE, 0, TAG_DEFAULT, MPI_COMM_WORLD);
-        }
-
-        // stop timer
-        if (current_rank == 0) {
-            endTime = MPI_Wtime();
-            printf("Time is %f\n", endTime - startTime);
-        }
-
-        // print out matrix here, if I'm the master
-        if (current_rank == 0 && N < 10) {
-            for (i = 0; i < N; i++) {
-                for (j = 0; j < N; j++) {
-                    printf("%f ", C[i][j]);
-                }
-                printf("\n");
-            }
-        }
-     */
     MPI_Finalize();
     return 0;
 }
