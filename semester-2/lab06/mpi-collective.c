@@ -27,11 +27,22 @@ int N, async, global_rank, global_size, block_size;
 void groupsPrepare() {
     group_numbers = calloc(global_size, sizeof(int));
     if (global_rank == 0) {
-        int group_size = global_size / groups_count;
-        for (int i = 0; i < global_size; i++) {
-            group_numbers[i] = i / group_size;
-            if (group_numbers[i] >= groups_count)
-                group_numbers[i] = groups_count - 1;
+        int available_ranks = global_size - groups_count;
+        int next_group_rank = 0;
+        for (int i = 0; i < groups_count; i++) {
+            if (i != groups_count - 1) {
+                int random_group_modifier = rand() % (available_ranks * 2 / 3);
+                available_ranks -= random_group_modifier;
+                int random_group_size = 1 + random_group_modifier;
+                for (int j = 0; j < random_group_size; j++) {
+                    group_numbers[next_group_rank + j] = i;
+                }
+                next_group_rank += random_group_size;
+            } else {
+                for (int j = next_group_rank; j < global_size; j++) {
+                    group_numbers[j] = groups_count - 1;
+                }
+            }
         }
     }
     MPI_Bcast(group_numbers, global_size, MPI_INT, 0, MPI_COMM_WORLD);
